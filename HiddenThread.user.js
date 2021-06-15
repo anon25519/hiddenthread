@@ -464,6 +464,21 @@ async function decrypt(password, data, onlyFirstBlock)
 ///////////////////////////////////////////////////////////////////////////////
 // ECC
 
+function importPublicKeyArrayFromPrivateKey(privateKeyBase58)
+{
+    // WebCrypto не умеет получать публичный ключ из приватного, поэтому используется elliptic.js
+    try
+    {
+        let e = new elliptic.ec('p256')
+        let publicKeyArray = e.keyFromPrivate(base58ToArray(privateKeyBase58)).getPublic().encode();
+        return new Uint8Array(publicKeyArray);
+    }
+    catch (e)
+    {
+        throw new Error('Не удалось получить публичный ключ из приватного: ' + e + ' stack:\n' + e.stack);
+    }
+}
+
 async function exportPrivateKey(privateKey)
 {
     let privateKeyJwk = await window.crypto.subtle.exportKey(
@@ -473,27 +488,53 @@ async function exportPrivateKey(privateKey)
     return arrayToBase58(base64urlToArray(privateKeyJwk.d));
 }
 
-async function importPrivateKey(privateKeyBase58)
+async function importPrivateKey(privateKeyBase58, isForSign = true)
 {
+    async function importPrivateKeyImpl(privateKeyJwk)
+    {
+        return await window.crypto.subtle.importKey(
+            "jwk",
+            privateKeyJwk,
+            {
+                name: isForSign ? 'ECDSA' : 'ECDH',
+                namedCurve: "P-256"
+            },
+            true,
+            [isForSign ? 'sign' : 'deriveKey']
+        );
+    }
+
+    let privateKey = null;
     let privateKeyJwk = {
         'crv': 'P-256',
         'd': arrayToBase64url(base58ToArray(privateKeyBase58)),
         'ext': true,
-        'key_ops': ['sign'],
+        'key_ops': [isForSign ? 'sign' : 'deriveKey'],
         'kty': 'EC',
-        'x': '', // public key X
-        'y': '' // public key Y
+        'x': '',
+        'y': ''
     }
-    let privateKey = await window.crypto.subtle.importKey(
-        "jwk",
-        privateKeyJwk,
+
+    try
+    {
+        privateKey = await importPrivateKeyImpl(privateKeyJwk);
+    }
+    catch (e)
+    {
+        // Если браузер не поддерживает импорт приватного ключа без публичного,
+        // то генерируем его
+        let publicKeyArray = importPublicKeyArrayFromPrivateKey(privateKeyBase58);
+        privateKeyJwk.x = arrayToBase64url(publicKeyArray.subarray(1, 33));
+        privateKeyJwk.y = arrayToBase64url(publicKeyArray.subarray(33));
+        try
         {
-            name: "ECDSA",
-            namedCurve: "P-256"
-        },
-        true,
-        ["sign"]
-    );
+            privateKey = await importPrivateKeyImpl(privateKeyJwk);
+        }
+        catch (e)
+        {
+            throw new Error('HiddenThread: не удалось импортировать приватный ключ: ' + e);
+        }
+    }
     return privateKey;
 }
 
@@ -506,34 +547,19 @@ async function exportPublicKey(publicKey)
     return arrayToBase58(new Uint8Array(publicKeyArray));
 }
 
-async function importPublicKey(publicKeyRaw)
+async function importPublicKey(publicKeyRaw, isForVerify = true)
 {
     let publicKey = await window.crypto.subtle.importKey(
         "raw",
         publicKeyRaw,
         {
-            name: "ECDSA",
+            name: isForVerify ? "ECDSA" : "ECDH",
             namedCurve: "P-256"
         },
         true,
-        ["verify"]
+        []
     );
     return publicKey;
-}
-
-function importPublicKeyArrayFromPrivateKey(privateKeyBase58)
-{
-    // WebCrypto не умеет получать публичный ключ из приватного, поэтому используется elliptic.js
-    try
-    {
-        let e = new elliptic.ec('p256')
-        let publicKeyArray = e.keyFromPrivate(base58ToArray(privateKeyBase58)).getPublic().encode();
-        return publicKeyArray;
-    }
-    catch (e)
-    {
-        throw new Error('Не удалось получить публичный ключ из приватного: ' + e + ' stack:\n' + e.stack);
-    }
 }
 
 async function generateKeyPair()
@@ -581,52 +607,13 @@ async function verify(publicKey, signature, data)
     return result;
 }
 
-async function importPrivateEcdhKey(privateKeyBase58)
-{
-    let privateKeyJwk = {
-        'crv': 'P-256',
-        'd': arrayToBase64url(base58ToArray(privateKeyBase58)),
-        'ext': true,
-        'key_ops': ['deriveKey'],
-        'kty': 'EC',
-        'x': '',
-        'y': ''
-    }
-    let privateKey = await window.crypto.subtle.importKey(
-        "jwk",
-        privateKeyJwk,
-        {
-            name: "ECDH",
-            namedCurve: "P-256"
-        },
-        true,
-        ["deriveKey"]
-    );
-    return privateKey;
-}
-
-async function importPublicEcdhKey(publicKeyBase58)
-{
-    let publicKey = await window.crypto.subtle.importKey(
-        "raw",
-        base58ToArray(publicKeyBase58),
-        {
-            name: "ECDH",
-            namedCurve: "P-256"
-        },
-        true,
-        ["deriveKey"]
-    );
-    return publicKey;
-}
-
 async function deriveSecretKey(privateKeyBase58, publicKeyBase58) {
     let secret = await window.crypto.subtle.deriveKey(
         {
             name: "ECDH",
-            public: await importPublicEcdhKey(publicKeyBase58)
+            public: await importPublicKey(base58ToArray(publicKeyBase58), false)
         },
-        await importPrivateEcdhKey(privateKeyBase58),
+        await importPrivateKey(privateKeyBase58, false),
         {
             name: "AES-CBC",
             length: 256
@@ -1323,7 +1310,7 @@ function createInterface()
             <div style="font-size:x-large;text-align:center;">Скрытотред v0.1</div>
             <div style="padding:5px;">
                 <span style="padding-right: 5px;">Пароль:</span>
-                <input id="hiddenThreadPassword" /> 
+                <input id="hiddenThreadPassword" />
                 <input id="loadHiddenPostsButton" type="button" style="padding: 5px;" value="Загрузить скрытопосты" />
                 <!--<input id="clearLoadedPosts" type="button" style="padding: 5px;" value="X" />-->
             </div>
@@ -1342,8 +1329,10 @@ function createInterface()
             <div id="hiddenFilesDiv" style="padding: 5px;">
                 <span>Выбери скрытые файлы: </span>
                 <input id="hiddenFilesInput" type="file" multiple="true" />
+                <br>
                 <span>Выбери картинку-контейнер: </span>
                 <input id="hiddenContainerInput" type="file">
+                <br>
                 <input id="hiddenFilesClearButton" type="button" value="Очистить список файлов">
             </div>
             <div style="padding: 5px;">
