@@ -1,7 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.2
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
