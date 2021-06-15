@@ -20,6 +20,10 @@ const SIGNED_POST_TYPE = 1;
 const MESSAGE_MAX_LENGTH = 30000
 const MAX_FILES_COUNT = 100;
 
+/* Раньше в меню скрипта было текстовое поле с
+вводом пароля, сейчас используется статический пароль */
+const PASSWORD_STATIC = "2ch";
+
 /*!
 Библиотеки:
 https://raw.githubusercontent.com/Stuk/jszip/master/dist/jszip.min.js
@@ -590,7 +594,7 @@ function createHiddenPost() {
     createHiddenPostImpl(containers[0],
         document.getElementById('hiddenPostInput').value,
         document.getElementById('hiddenFilesInput').files,
-        document.getElementById('hiddenThreadPassword').value,
+        PASSWORD_STATIC,
         document.getElementById('privateKey').value,
         document.getElementById('otherPublicKey').value)
         .then(function (imageResult) {
@@ -980,17 +984,13 @@ function reloadHiddenPosts() {
 function loadPost(postId, file_url) {
     let img = new Image();
     img.onload = (function () {
-        let c = document.getElementById('imagesLoadedCount')
-        c.textContent = String(parseInt(c.textContent) + 1);
         console.log('HiddenThread: loading post ' + postId + ' ' + file_url);
 
         loadPostFromImage(img,
-            document.getElementById('hiddenThreadPassword').value,
+            PASSWORD_STATIC,
             document.getElementById('privateKey').value)
             .then(function (postResult) {
                 if (postResult == null) return;
-                let c = document.getElementById('hiddenPostsLoadedCount')
-                c.textContent = String(parseInt(c.textContent) + 1);
                 renderHiddenPost(postId, postResult);
                 window.gLoadedHiddenPosts.add(postId);
             });
@@ -1004,19 +1004,9 @@ function createInterface() {
     hiddenPostDiv.id = 'hiddenPostDiv';
     hiddenPostDiv.innerHTML =
         '<hr>' +
-        '    <div style="font-size:x-large;text-align:center;">Скрытотред v0.1</div>' +
-        '    <div style="padding:5px;">' +
-        '        <span style="padding-right: 5px;">Пароль:</span>' +
-        '        <input id="hiddenThreadPassword">' +
+        '    <div style="font-size:x-large;text-align:center;">Скрытотред v0.2</div>' +
+        '    <div style="padding:5px;display: flex; justify-content: center;">' +
         '        <input id="reloadHiddenPostsButton" type="button" style="padding: 5px;" value="Перезагрузить скрытопосты">' +
-        //'        <input id="clearLoadedPosts" type="button" style="padding: 5px;" value="X">'+
-        '    </div>' +
-        '    <div style="padding:5px;text-align:center;">' +
-        //'        <span id="loadingStatus" style="display: none">Загрузка...</span>'+
-        //'        <br>'+
-        '        Загружено картинок: <span id="imagesLoadedCount">0</span>/<span id="imagesCount">0</span>' +
-        '        <br>' +
-        '        Загружено скрытопостов: <span id="hiddenPostsLoadedCount">0</span>' +
         '    </div>' +
         '    <textarea id="hiddenPostInput" placeholder="Пиши скрытый текст тут" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;" rows="10"></textarea>' +
         '    <div id="hiddenFilesDiv" style="padding: 5px;">' +
@@ -1035,7 +1025,7 @@ function createInterface() {
         '        Публичный ключ: <br>' +
         '        <input id="publicKey" readonly style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">' +
         '        <br>' +
-        '        <div align="center">' +
+        '        <div align="center" style="margin-top: 8px">' +
         '            <input id="generateKeyPairButton" type="button" style="padding: 5px;" value="Сгенерировать ключи">' +
         '        </div>' +
         '    </div>' +
@@ -1056,13 +1046,6 @@ function createInterface() {
     document.getElementById('reloadHiddenPostsButton').onclick = function () {
         reloadHiddenPosts();
     }
-    // document.getElementById('clearLoadedPosts').onclick = function()
-    // {
-    //     window.gLoadedHiddenPosts.clear();
-    //     document.getElementById('imagesCount').textContent = '0';
-    //     document.getElementById('imagesLoadedCount').textContent = '0';
-    //     document.getElementById('hiddenPostsLoadedCount').textContent = '0';
-    // }
     document.getElementById('hiddenFilesClearButton').onclick = function () {
         document.getElementById('hiddenFilesInput').value = null;
     }
@@ -1129,9 +1112,6 @@ target.addEventListener("DOMNodeInserted", function (event) {
         let url = postFiles[0].path;
         let postId = postIdList[i];
         loadPost(postId, url);
-
-        let c = document.getElementById('imagesCount')
-        c.textContent = String(parseInt(c.textContent) + 1);
 
         window.gLoadedHiddenPosts.add(post_id);
     }
