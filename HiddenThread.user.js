@@ -603,7 +603,7 @@ function createHiddenPost() {
             imageContainerDiv.appendChild(img);
 
             imageResult.canvas.toBlob(function (blob) {
-                blob.name = 'image.png';
+                blob.name = 'image.png'; // TODO: set custom name
                 window.FormFiles.addMultiFiles([blob]);
             });
 
@@ -966,37 +966,11 @@ async function loadPostFromImage(img, password, privateKey) {
     };
 }
 
-function loadHiddenPosts() {
-    if (window.gLoadedHiddenPosts == undefined) {
-        // Список id всех просмотренных постов
-        window.gLoadedHiddenPosts = new Set();
-    }
+/* Перепроверить все посты */
+function reloadHiddenPosts() {
+    window.gLoadedHiddenPosts = new Set();
 
-    let threadId = window.thread.id;
-    let thread = window.Post(threadId);
-    let postIdList = thread.threadPosts();
-
-    for (let i = 0; i < postIdList.length; i++) {
-        if (window.gLoadedHiddenPosts.has(postIdList[i])) {
-            continue;
-        }
-        window.gLoadedHiddenPosts.add(postIdList[i]);
-
-        let postAjax = thread.getPostsObj()[String(postIdList[i])].ajax;
-        if (!postAjax) continue;
-
-        let postFiles = postAjax.files;
-        if (!(postFiles.length > 0 && postFiles[0].path.endsWith('.png'))) {
-            continue;
-        }
-
-        let url = postFiles[0].path;
-        let postId = postIdList[i];
-        loadPost(postId, url);
-
-        let c = document.getElementById('imagesCount')
-        c.textContent = String(parseInt(c.textContent) + 1);
-    }
+    /* Посты обновятся основным циклом */
 }
 
 /*
@@ -1018,6 +992,7 @@ function loadPost(postId, file_url) {
                 let c = document.getElementById('hiddenPostsLoadedCount')
                 c.textContent = String(parseInt(c.textContent) + 1);
                 renderHiddenPost(postId, postResult);
+                window.gLoadedHiddenPosts.add(postId);
             });
     });
     img.setAttribute("src", file_url);
@@ -1033,7 +1008,7 @@ function createInterface() {
         '    <div style="padding:5px;">' +
         '        <span style="padding-right: 5px;">Пароль:</span>' +
         '        <input id="hiddenThreadPassword">' +
-        '        <input id="loadHiddenPostsButton" type="button" style="padding: 5px;" value="Загрузить скрытопосты">' +
+        '        <input id="reloadHiddenPostsButton" type="button" style="padding: 5px;" value="Перезагрузить скрытопосты">' +
         //'        <input id="clearLoadedPosts" type="button" style="padding: 5px;" value="X">'+
         '    </div>' +
         '    <div style="padding:5px;text-align:center;">' +
@@ -1078,8 +1053,8 @@ function createInterface() {
 
     document.getElementById('postform').appendChild(hiddenPostDiv);
 
-    document.getElementById('loadHiddenPostsButton').onclick = function () {
-        loadHiddenPosts();
+    document.getElementById('reloadHiddenPostsButton').onclick = function () {
+        reloadHiddenPosts();
     }
     // document.getElementById('clearLoadedPosts').onclick = function()
     // {
@@ -1118,7 +1093,46 @@ function createInterface() {
     }
 }
 
-(function () {
-    'use strict';
-    createInterface();
-})();
+createInterface();
+
+/* Отслеживание новых постов */
+
+if (window.gLoadedHiddenPosts == undefined) {
+    // Список id всех просмотренных постов
+    window.gLoadedHiddenPosts = new Set();
+}
+
+// Выбираем элемент
+var target = document.querySelector('#posts-form');
+
+target.addEventListener("DOMNodeInserted", function (event) {
+    // works like while-true loop
+    let threadId = window.thread.id;
+    let thread = window.Post(threadId);
+    let postIdList = thread.threadPosts();
+
+    for (let i = 0; i < postIdList.length; i++) {
+        const post_id = postIdList[i];
+        if (window.gLoadedHiddenPosts.has(post_id)) {
+            continue;
+        }
+
+        let postAjax = thread.getPostsObj()[String(postIdList[i])].ajax;
+        if (!postAjax) continue;
+
+        let postFiles = postAjax.files;
+        if (!(postFiles.length > 0 && postFiles[0].path.endsWith('.png'))) {
+            window.gLoadedHiddenPosts.add(post_id);
+            continue;
+        }
+
+        let url = postFiles[0].path;
+        let postId = postIdList[i];
+        loadPost(postId, url);
+
+        let c = document.getElementById('imagesCount')
+        c.textContent = String(parseInt(c.textContent) + 1);
+
+        window.gLoadedHiddenPosts.add(post_id);
+    }
+}, false);
