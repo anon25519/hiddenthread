@@ -649,7 +649,7 @@ function createFileLinksDiv(files) {
 
 // Добавление HTML скрытопоста к основному посту
 function addHiddenPostToHtml(postId, postResult) {
-    console.log('HiddenThread: postResult:');
+    console.log(`HiddenThread: Post ${postId} is hidden, its object:`);
     console.log(postResult);
     let postBodyDiv = document.createElement('div');
     postBodyDiv.id = 'hidden_post-body-' + postId;
@@ -891,11 +891,30 @@ async function decryptData(password, imageArray, dataOffset) {
     };
 }
 
+/*
+Возвращает объект скрытого поста.
+Объект:
+{
+  "header": {
+    "magic": "ht",
+    "version": 1,
+    "blocksCount": 9,
+    "timestamp": 1623775315,
+    "type": 0
+  },
+  "post": {
+    "message": "test",
+    "files": []
+  },
+  "verifyResult": null,
+  "isPrivate": false
+}
+*/
 async function loadPostFromImage(img, password, privateKey) {
     let canvas = document.createElement('canvas');
     canvas.width = img.width;
     canvas.height = img.height;
-    let ctx = canvas.getContext("2d")
+    let ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
@@ -970,29 +989,38 @@ function loadHiddenPosts() {
         if (!(postFiles.length > 0 && postFiles[0].path.endsWith('.png'))) {
             continue;
         }
+
         let url = postFiles[0].path;
         let postId = postIdList[i];
-        let img = new Image();
-        img.onload = (function () {
-            let c = document.getElementById('imagesLoadedCount')
-            c.textContent = String(parseInt(c.textContent) + 1);
-            console.log('HiddenThread: loading post ' + postIdList[i] + ' ' + url);
-
-            loadPostFromImage(img,
-                document.getElementById('hiddenThreadPassword').value,
-                document.getElementById('privateKey').value)
-                .then(function (postResult) {
-                    if (postResult == null) return;
-                    let c = document.getElementById('hiddenPostsLoadedCount')
-                    c.textContent = String(parseInt(c.textContent) + 1);
-                    renderHiddenPost(postId, postResult);
-                });
-        });
-        img.setAttribute("src", url);
+        loadPost(postId, url);
 
         let c = document.getElementById('imagesCount')
         c.textContent = String(parseInt(c.textContent) + 1);
     }
+}
+
+/*
+Проверяет есть ли в этом посте скрытый пост, расшифровывает
+и выводит результат
+*/
+function loadPost(postId, file_url) {
+    let img = new Image();
+    img.onload = (function () {
+        let c = document.getElementById('imagesLoadedCount')
+        c.textContent = String(parseInt(c.textContent) + 1);
+        console.log('HiddenThread: loading post ' + postId + ' ' + file_url);
+
+        loadPostFromImage(img,
+            document.getElementById('hiddenThreadPassword').value,
+            document.getElementById('privateKey').value)
+            .then(function (postResult) {
+                if (postResult == null) return;
+                let c = document.getElementById('hiddenPostsLoadedCount')
+                c.textContent = String(parseInt(c.textContent) + 1);
+                renderHiddenPost(postId, postResult);
+            });
+    });
+    img.setAttribute("src", file_url);
 }
 
 
