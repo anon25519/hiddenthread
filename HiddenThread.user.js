@@ -58,25 +58,25 @@ for (let i = 0; i < libs.length; i++) {
 ///////////////////////////////////////////////////////////////////////////////
 // Misc
 
-function arrayToBase64( arr ) {
+function arrayToBase64(arr) {
     let binary = '';
     let len = arr.byteLength;
     for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode( arr[ i ] );
+        binary += String.fromCharCode(arr[i]);
     }
-    return window.btoa( binary );
+    return window.btoa(binary);
 }
 
 function arrayToBase64url(byteArray) {
-  return btoa(Array.from(new Uint8Array(byteArray)).map(val => {
-    return String.fromCharCode(val);
-  }).join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/\=/g, '');
+    return btoa(Array.from(new Uint8Array(byteArray)).map(val => {
+        return String.fromCharCode(val);
+    }).join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/\=/g, '');
 }
 
 function base64urlToArray(b64urlstring) {
-  return new Uint8Array(atob(b64urlstring.replace(/-/g, '+').replace(/_/g, '/')).split('').map(val => {
-    return val.charCodeAt(0);
-  }));
+    return new Uint8Array(atob(b64urlstring.replace(/-/g, '+').replace(/_/g, '/')).split('').map(val => {
+        return val.charCodeAt(0);
+    }));
 }
 
 
@@ -84,17 +84,17 @@ function base64urlToArray(b64urlstring) {
 https://gist.github.com/diafygi/90a3e80ca1c2793220e5/
 */
 var BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-var arrayToBase58 = function(B) {
+var arrayToBase58 = function (B) {
     var d = [],   //the array for storing the stream of base58 digits
         s = "",   //the result string variable that will be returned
         j,        //the iterator variable for the base58 digit array (d)
         c,        //the carry amount variable that is used to overflow from the current base58 digit to the next base58 digit
         n;        //a temporary placeholder variable for the current base58 digit
-    for(var i = 0; i < B.length; i++) { //loop through each byte in the input stream
+    for (var i = 0; i < B.length; i++) { //loop through each byte in the input stream
         j = 0,                           //reset the base58 digit iterator
-        c = B[i];                        //set the initial carry amount equal to the current byte amount
+            c = B[i];                    //set the initial carry amount equal to the current byte amount
         s += c || s.length ^ i ? "" : 1; //prepend the result string with a "1" (0 in base58) if the byte stream is zero and non-zero bytes haven't been seen yet (to ensure correct decode length)
-        while(j in d || c) {             //start looping through the digits until there are no more digits and no carry amount
+        while (j in d || c) {            //start looping through the digits until there are no more digits and no carry amount
             n = d[j];                    //set the placeholder for the current base58 digit
             n = n ? n * 256 + c : c;     //shift the current base58 one byte and add the carry amount (or just add the carry amount if this is a new digit)
             c = n / 58 | 0;              //find the new carry amount (floored integer of current digit divided by 58)
@@ -102,17 +102,16 @@ var arrayToBase58 = function(B) {
             j++                          //iterate to the next base58 digit
         }
     }
-    while(j--)        //since the base58 digits are backwards, loop through them in reverse order
+    while (j--)        //since the base58 digits are backwards, loop through them in reverse order
         s += BASE58_ALPHABET[d[j]]; //lookup the character associated with each base58 digit
     return s          //return the final base58 string
 }
-function base58ToArray(S){var d=[],b=[],i,j,c,n;for(i in S){j=0,c=BASE58_ALPHABET.indexOf(S[i]);if(c<0)return undefined;c||b.length^i?i:b.push(0);while(j in d||c){n=d[j];n=n?n*58+c:c;c=n>>8;d[j]=n%256;j++}}while(j--)b.push(d[j]);return new Uint8Array(b)};
+function base58ToArray(S) { var d = [], b = [], i, j, c, n; for (i in S) { j = 0, c = BASE58_ALPHABET.indexOf(S[i]); if (c < 0) return undefined; c || b.length ^ i ? i : b.push(0); while (j in d || c) { n = d[j]; n = n ? n * 58 + c : c; c = n >> 8; d[j] = n % 256; j++ } } while (j--) b.push(d[j]); return new Uint8Array(b) };
 
 
 /* Randomize array in-place using Durstenfeld shuffle algorithm */
 // steps: [1, array.length - 1]
-function shuffleArray(array, steps)
-{
+function shuffleArray(array, steps) {
     let end = array.length - 1 - steps;
     if (end < 0) end = 0;
     let mt = new MersenneTwister(1337);
@@ -124,14 +123,11 @@ function shuffleArray(array, steps)
     }
 }
 
-function getShuffledIndexList(length, steps)
-{
+function getShuffledIndexList(length, steps) {
     let arrayIndexList = new Array(length / 4 * 3);
-    for (let i = 0, j = 0; i < length; i++)
-    {
+    for (let i = 0, j = 0; i < length; i++) {
         // Skip alpha channel
-        if ((i + 1) % 4 != 0)
-        {
+        if ((i + 1) % 4 != 0) {
             arrayIndexList[j] = i;
             j++;
         }
@@ -147,21 +143,19 @@ function getShuffledIndexList(length, steps)
 ///////////////////////////////////////////////////////////////////////////////
 // AES
 
-async function getKeyMaterial(password)
-{
+async function getKeyMaterial(password) {
     let enc = new TextEncoder();
     let key = await window.crypto.subtle.importKey(
         "raw",
         enc.encode(password), {
-            name: "PBKDF2"
-        },
+        name: "PBKDF2"
+    },
         false, ["deriveBits", "deriveKey"]
     );
     return key;
 }
 
-async function getKey(password, salt)
-{
+async function getKey(password, salt) {
     let keyMaterial = await getKeyMaterial(password);
     let key = await window.crypto.subtle.deriveKey(
         {
@@ -181,8 +175,7 @@ async function getKey(password, salt)
     return key;
 }
 
-async function encrypt(password, data)
-{
+async function encrypt(password, data) {
     const iv = window.crypto.getRandomValues(new Uint8Array(IV_SIZE));
     const algorithm = {
         iv,
@@ -203,8 +196,7 @@ async function encrypt(password, data)
     return res;
 }
 
-async function decrypt(password, data, onlyFirstBlock)
-{
+async function decrypt(password, data, onlyFirstBlock) {
     let iv = data.subarray(0, IV_SIZE);
     const algorithm = {
         iv,
@@ -230,8 +222,7 @@ async function decrypt(password, data, onlyFirstBlock)
 ///////////////////////////////////////////////////////////////////////////////
 // ECC
 
-async function exportPrivateKey(privateKey)
-{
+async function exportPrivateKey(privateKey) {
     let privateKeyJwk = await window.crypto.subtle.exportKey(
         "jwk",
         privateKey
@@ -239,8 +230,7 @@ async function exportPrivateKey(privateKey)
     return arrayToBase58(base64urlToArray(privateKeyJwk.d));
 }
 
-async function importPrivateKey(privateKeyBase58)
-{
+async function importPrivateKey(privateKeyBase58) {
     let privateKeyJwk = {
         'crv': 'P-256',
         'd': arrayToBase64url(base58ToArray(privateKeyBase58)),
@@ -263,8 +253,7 @@ async function importPrivateKey(privateKeyBase58)
     return privateKey;
 }
 
-async function exportPublicKey(publicKey)
-{
+async function exportPublicKey(publicKey) {
     let publicKeyArray = await window.crypto.subtle.exportKey(
         "raw",
         publicKey
@@ -272,8 +261,7 @@ async function exportPublicKey(publicKey)
     return arrayToBase58(new Uint8Array(publicKeyArray));
 }
 
-async function importPublicKey(publicKeyRaw)
-{
+async function importPublicKey(publicKeyRaw) {
     let publicKey = await window.crypto.subtle.importKey(
         "raw",
         publicKeyRaw,
@@ -287,23 +275,19 @@ async function importPublicKey(publicKeyRaw)
     return publicKey;
 }
 
-function importPublicKeyArrayFromPrivateKey(privateKeyBase58)
-{
+function importPublicKeyArrayFromPrivateKey(privateKeyBase58) {
     // WebCrypto не умеет получать публичный ключ из приватного, поэтому используется elliptic.js
-    try
-    {
+    try {
         let e = new elliptic.ec('p256')
         let publicKeyArray = e.keyFromPrivate(base58ToArray(privateKeyBase58)).getPublic().encode();
         return publicKeyArray;
     }
-    catch (e)
-    {
+    catch (e) {
         throw new Error('Не удалось получить публичный ключ из приватного: ' + e + ' stack:\n' + e.stack);
     }
 }
 
-async function generateKeyPair()
-{
+async function generateKeyPair() {
     let keyPair = await window.crypto.subtle.generateKey(
         {
             name: "ECDSA",
@@ -318,12 +302,11 @@ async function generateKeyPair()
     return pair;
 }
 
-async function sign(privateKeyBase58, data)
-{
+async function sign(privateKeyBase58, data) {
     let signature = await window.crypto.subtle.sign(
         {
             name: "ECDSA",
-            hash: {name: "SHA-256"},
+            hash: { name: "SHA-256" },
         },
         await importPrivateKey(privateKeyBase58),
         data
@@ -332,12 +315,11 @@ async function sign(privateKeyBase58, data)
     return new Uint8Array(signature);
 }
 
-async function verify(publicKey, signature, data)
-{
+async function verify(publicKey, signature, data) {
     let result = await window.crypto.subtle.verify(
         {
             name: "ECDSA",
-            hash: {name: "SHA-256"},
+            hash: { name: "SHA-256" },
         },
         await importPublicKey(publicKey),
         signature,
@@ -347,8 +329,7 @@ async function verify(publicKey, signature, data)
     return result;
 }
 
-async function importPrivateEcdhKey(privateKeyBase58)
-{
+async function importPrivateEcdhKey(privateKeyBase58) {
     let privateKeyJwk = {
         'crv': 'P-256',
         'd': arrayToBase64url(base58ToArray(privateKeyBase58)),
@@ -371,8 +352,7 @@ async function importPrivateEcdhKey(privateKeyBase58)
     return privateKey;
 }
 
-async function importPublicEcdhKey(publicKeyBase58)
-{
+async function importPublicEcdhKey(publicKeyBase58) {
     let publicKey = await window.crypto.subtle.importKey(
         "raw",
         base58ToArray(publicKeyBase58),
@@ -414,63 +394,54 @@ async function deriveSecretKey(privateKeyBase58, publicKeyBase58) {
 
 // Порядок упаковки:
 // color (RGB), x, y, channel bit(0..7)
-function hideDataToArray(array, data)
-{
+function hideDataToArray(array, data) {
     let requiredSteps = data.length * 8;
     let arrayIndexList = getShuffledIndexList(array.length, requiredSteps);
     let arrayIndex = arrayIndexList.length - 1; // Идем назад, т.к. индексы перемешаны с конца
     let arrayBitIndex = 0;
-    for (let dataIndex = 0; dataIndex < data.length; dataIndex++)
-    {
-        for (let bitIndex = 7; bitIndex >= 0; bitIndex--)
-        {
+    for (let dataIndex = 0; dataIndex < data.length; dataIndex++) {
+        for (let bitIndex = 7; bitIndex >= 0; bitIndex--) {
             let bit = (data[dataIndex] >> bitIndex) & 1;
             array[arrayIndexList[arrayIndex]] &= ~(1 << arrayBitIndex); // Clear bit
             array[arrayIndexList[arrayIndex]] |= bit << arrayBitIndex; // Set bit
             arrayIndex--;
-            if (arrayIndex < 0)
-            {
-                arrayIndex = arrayIndexList.length - 1;
-                arrayBitIndex++;
-                if (arrayBitIndex == 8 && dataIndex < (data.length - 1))
-                {
-                    throw new Error('Не удалось вместить данные в контейнер, осталось ещё '+
-                                    (data.length - dataIndex - 1) + ' из ' + data.length + ' байт');
-                }
+            if (!(arrayIndex < 0)) {
+                continue;
+            }
+            arrayIndex = arrayIndexList.length - 1;
+            arrayBitIndex++;
+            if (arrayBitIndex == 8 && dataIndex < (data.length - 1)) {
+                throw new Error('Не удалось вместить данные в контейнер, осталось ещё ' +
+                    (data.length - dataIndex - 1) + ' из ' + data.length + ' байт');
             }
         }
     }
 }
 
-function extractDataFromArray(array, data)
-{
+function extractDataFromArray(array, data) {
     let requiredSteps = data.length * 8;
     let arrayIndexList = getShuffledIndexList(array.length, requiredSteps);
     let arrayBitIndex = 0;
     let dataBitIndex = 7;
     let dataIndex = 0;
     let arrayIndex = arrayIndexList.length - 1; // Идем назад, т.к. индексы перемешаны с конца
-    while (true)
-    {
+    while (true) {
         let bit = (array[arrayIndexList[arrayIndex]] >> arrayBitIndex) & 1;
         data[dataIndex] |= bit << dataBitIndex;
         dataBitIndex--;
-        if (dataBitIndex < 0)
-        {
+        if (dataBitIndex < 0) {
             dataBitIndex = 7;
             dataIndex++;
             if (dataIndex >= data.length) { return; }
         }
 
         arrayIndex--;
-        if (arrayIndex < 0)
-        {
+        if (arrayIndex < 0) {
             arrayIndex = arrayIndexList.length - 1;
             arrayBitIndex++;
-            if (arrayBitIndex == 8)
-            {
-                throw new Error('Неожиданный конец контейнера, ожидалось ещё '+
-                                (data.length - dataIndex) + ' из ' + data.length + ' байт');
+            if (arrayBitIndex == 8) {
+                throw new Error('Неожиданный конец контейнера, ожидалось ещё ' +
+                    (data.length - dataIndex) + ' из ' + data.length + ' байт');
             }
         }
     }
@@ -480,15 +451,13 @@ function extractDataFromArray(array, data)
 
 
 
-async function hideDataToImage(file, data)
-{
+async function hideDataToImage(file, data) {
     let imageBitmap = await createImageBitmap(file);
     let rgbCount = imageBitmap.width * imageBitmap.height * 3;
-    if (rgbCount < data.length)
-    {
+    if (rgbCount < data.length) {
         let rest = Math.ceil((data.length - rgbCount) / 3);
-        throw new Error('Невозможно вместить данные в контейнер, необходимо ещё '+
-                        'как минимум ' + rest + ' пикселей. Выбери картинку с большим разрешением.');
+        throw new Error('Невозможно вместить данные в контейнер, необходимо ещё ' +
+            'как минимум ' + rest + ' пикселей. Выбери картинку с большим разрешением.');
     }
 
     let canvas = document.createElement('canvas');
@@ -505,8 +474,7 @@ async function hideDataToImage(file, data)
     return { 'canvas': canvas, 'len': data.length, 'percent': percent };
 }
 
-function createHeader(type, totalLength)
-{
+function createHeader(type, totalLength) {
     let header = new Uint8Array(BLOCK_SIZE);
     header.set(new TextEncoder().encode('ht'));
     let version = 0x01;
@@ -528,8 +496,7 @@ function createHeader(type, totalLength)
     return header;
 }
 
-async function packPost(message, files, privateKey)
-{
+async function packPost(message, files, privateKey) {
     let zip = new JSZip();
     zip.file("_post.txt", message);
     for (let i = 0; i < files.length; i++) {
@@ -538,7 +505,7 @@ async function packPost(message, files, privateKey)
     }
 
     let archive = await zip.generateAsync({
-        type:"uint8array",
+        type: "uint8array",
         compression: "DEFLATE",
         compressionOptions: {
             level: 6 // [1..9]
@@ -547,8 +514,7 @@ async function packPost(message, files, privateKey)
 
     let data = null;
     // Если указан приватный ключ, подписываем пост
-    if (privateKey.length > 0)
-    {
+    if (privateKey.length > 0) {
         let header = createHeader(SIGNED_POST_TYPE, PUBLIC_KEY_SIZE + SIGNATURE_SIZE + archive.length);
         let publicKeyArray = importPublicKeyArrayFromPrivateKey(privateKey);
 
@@ -559,16 +525,14 @@ async function packPost(message, files, privateKey)
         data.set(archive, BLOCK_SIZE + PUBLIC_KEY_SIZE + SIGNATURE_SIZE);
 
         let signatureArray = await sign(privateKey, data);
-        if (signatureArray.length != SIGNATURE_SIZE || publicKeyArray.length != PUBLIC_KEY_SIZE)
-        {
+        if (signatureArray.length != SIGNATURE_SIZE || publicKeyArray.length != PUBLIC_KEY_SIZE) {
             console.log(signatureArray);
             console.log(publicKeyArray);
             throw new Error("signatureArray or publicKeyArray size incorrect");
         }
         data.set(signatureArray, BLOCK_SIZE + PUBLIC_KEY_SIZE);
     }
-    else
-    {
+    else {
         let header = createHeader(NORMAL_POST_TYPE, archive.length);
         data = new Uint8Array(header.length + archive.length);
         data.set(header);
@@ -578,11 +542,9 @@ async function packPost(message, files, privateKey)
     return data;
 }
 
-async function createHiddenPostImpl(image, message, files, password, privateKey, otherPublicKey)
-{
+async function createHiddenPostImpl(image, message, files, password, privateKey, otherPublicKey) {
     let oneTimePublicKey = null;
-    if (otherPublicKey.length > 0)
-    {
+    if (otherPublicKey.length > 0) {
         // Создаем одноразовую пару ключей
         let pair = await generateKeyPair();
         // Генерируем секрет с одноразовым приватным ключом и публичным ключом получателя
@@ -595,8 +557,7 @@ async function createHiddenPostImpl(image, message, files, password, privateKey,
 
     let encryptedData = await encrypt(password, postData);
 
-    if (oneTimePublicKey != null)
-    {
+    if (oneTimePublicKey != null) {
         // Вставляем одноразовый ключ в начало массива данных
         let keyAndData = new Uint8Array(oneTimePublicKey.length + encryptedData.length);
         keyAndData.set(oneTimePublicKey);
@@ -609,70 +570,63 @@ async function createHiddenPostImpl(image, message, files, password, privateKey,
     return imageResult;
 }
 
-function createHiddenPost()
-{
+function createHiddenPost() {
     let imageContainerDiv = document.getElementById('imageContainerDiv');
     imageContainerDiv.innerHTML = '';
 
     let containers = document.getElementById('hiddenContainerInput').files;
 
-    if (containers.length == 0)
-    {
+    if (containers.length == 0) {
         alert('Выбери картинку-контейнер!');
         return;
     }
 
     if (containers[0].type != 'image/png' &&
-        containers[0].type != 'image/jpeg' &&
-        containers[0].type != 'image/jpeg')
-    {
+        containers[0].type != 'image/jpeg') {
         alert('Выбранный файл должен быть JPG или PNG картинкой!');
         return;
     }
 
     createHiddenPostImpl(containers[0],
-                    document.getElementById('hiddenPostInput').value,
-                    document.getElementById('hiddenFilesInput').files,
-                    document.getElementById('hiddenThreadPassword').value,
-                    document.getElementById('privateKey').value,
-                    document.getElementById('otherPublicKey').value)
-    .then(function(imageResult){
-        let img = document.createElement('img');
-        img.style = "max-width: 100%; max-height: 100%;";
-        img.src = imageResult.canvas.toDataURL("image/png");
+        document.getElementById('hiddenPostInput').value,
+        document.getElementById('hiddenFilesInput').files,
+        document.getElementById('hiddenThreadPassword').value,
+        document.getElementById('privateKey').value,
+        document.getElementById('otherPublicKey').value)
+        .then(function (imageResult) {
+            let img = document.createElement('img');
+            img.style = "max-width: 100%; max-height: 100%;";
+            img.src = imageResult.canvas.toDataURL("image/png");
 
-        imageContainerDiv.appendChild(createElementFromHTML('<span>Сохрани изображение ниже и вставь в форму отправки, если оно не вставилось автоматически:</span>'));
-        imageContainerDiv.appendChild(document.createElement('br'));
-        imageContainerDiv.appendChild(img);
+            imageContainerDiv.appendChild(createElementFromHTML('<span>Сохрани изображение ниже и вставь в форму отправки, если оно не вставилось автоматически:</span>'));
+            imageContainerDiv.appendChild(document.createElement('br'));
+            imageContainerDiv.appendChild(img);
 
-        imageResult.canvas.toBlob(function(blob) {
-            blob.name = 'image.png';
-            window.FormFiles.addMultiFiles([blob]);
+            imageResult.canvas.toBlob(function (blob) {
+                blob.name = 'image.png';
+                window.FormFiles.addMultiFiles([blob]);
+            });
+
+            alert('Спрятано ' + imageResult.len + ' байт (занято ' + imageResult.percent + '% изображения)');
+        })
+        .catch(function (e) {
+            console.log('Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
+            alert('Ошибка при создании скрытопоста: ' + e);
         });
-
-        alert('Спрятано ' + imageResult.len + ' байт (занято ' + imageResult.percent + '% изображения)');
-    })
-    .catch(function(e){
-        console.log('Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
-        alert('Ошибка при создании скрытопоста: ' + e);
-    });
 }
 
 
 
 
 
-function createFileLinksDiv(files)
-{
+function createFileLinksDiv(files) {
     let fileLinksDiv = document.createElement('div');
-    if (files.length == 0)
-    {
+    if (files.length == 0) {
         return fileLinksDiv;
     }
 
     fileLinksDiv.innerHTML += 'Файлы: ';
-    for (let i = 0; i < files.length; i++)
-    {
+    for (let i = 0; i < files.length; i++) {
         let link = document.createElement('a');
         link.target = "_blank";
         link.innerText = files[i].name;
@@ -686,8 +640,7 @@ function createFileLinksDiv(files)
         downloadLink.href = URL.createObjectURL(files[i].data);
         fileLinksDiv.appendChild(downloadLink);
 
-        if (i < files.length - 1)
-        {
+        if (i < files.length - 1) {
             fileLinksDiv.innerHTML += ', ';
         }
     }
@@ -695,8 +648,7 @@ function createFileLinksDiv(files)
 }
 
 // Добавление HTML скрытопоста к основному посту
-function addHiddenPostToHtml(postId, postResult)
-{
+function addHiddenPostToHtml(postId, postResult) {
     console.log('HiddenThread: postResult:');
     console.log(postResult);
     let postBodyDiv = document.createElement('div');
@@ -714,22 +666,20 @@ function addHiddenPostToHtml(postId, postResult)
     let postArticleMessage = document.createElement('div');
     postArticleMessage.innerText = postResult.post.message;
 
-    if (postResult.isPrivate)
-    {
+    if (postResult.isPrivate) {
         postMetadata.appendChild(createElementFromHTML('<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом</i></div>'));
     }
     let timeString = (new Date(postResult.header.timestamp * 1000))
-                     .toISOString().replace('T',' ').replace(/\.\d+Z/g,'');
-    postMetadata.appendChild(createElementFromHTML('<div>Дата создания скрытопоста (UTC): '+timeString+'</div>'));
+        .toISOString().replace('T', ' ').replace(/\.\d+Z/g, '');
+    postMetadata.appendChild(createElementFromHTML('<div>Дата создания скрытопоста (UTC): ' + timeString + '</div>'));
     postMetadata.appendChild(createFileLinksDiv(postResult.post.files));
 
-    if (postResult.verifyResult != null)
-    {
+    if (postResult.verifyResult != null) {
         let postArticleSign = document.createElement('div');
         postArticleSign.innerHTML =
             'Публичный ключ: <span ' +
             (postResult.verifyResult.isVerified ? 'style="color:green;"' : 'style="color:red;"') + '>' +
-            postResult.verifyResult.publicKey + '</span>'+
+            postResult.verifyResult.publicKey + '</span>' +
             (postResult.verifyResult.isVerified ? '' : ' (неверная подпись!)');
         postMetadata.appendChild(postArticleSign);
     }
@@ -751,31 +701,27 @@ function addHiddenPostToHtml(postId, postResult)
 }
 
 // Добавление HTML скрытопоста в объект основного поста (для всплывающих постов)
-function addHiddenPostToObj(postId)
-{
+function addHiddenPostToObj(postId) {
     let thread = window.Post(window.thread.id);
     let currentPost = thread.getPostsObj()[String(postId)];
     let postArticle = document.getElementById('hidden_m' + postId);
     currentPost.ajax.comment = currentPost.ajax.comment + '<br>' + postArticle.innerHTML;
 }
 
-function createElementFromHTML(htmlString)
-{
+function createElementFromHTML(htmlString) {
     let div = document.createElement('div');
     div.innerHTML = htmlString.trim();
     return div.firstElementChild;
 }
 
-function createReplyLink(postId)
-{
+function createReplyLink(postId) {
     let threadId = window.thread.id;
     return '<a href="/' + window.board + '/res/' + threadId + '.html#' + postId +
         '" class="post-reply-link" data-thread="' + threadId + '" data-num="' + postId +
         '">&gt;&gt;' + postId + '</a>';
 }
 
-function addReplyLinks(postId, text)
-{
+function addReplyLinks(postId, text) {
     let thread = window.Post(window.thread.id);
     let postArticle = document.getElementById('hidden_m' + postId);
 
@@ -784,8 +730,7 @@ function addReplyLinks(postId, text)
 
     let refPostIdSet = new Set();
     let indexDiff = 0;
-    for (const match of linkMatches)
-    {
+    for (const match of linkMatches) {
         let refPostId = match[1];
 
         // Добавление ссылки на другой пост (замена текста ">>..." на ссылку) в HTML
@@ -795,25 +740,21 @@ function addReplyLinks(postId, text)
             postArticle.innerHTML.substr(match.index + indexDiff + oldLength);
         indexDiff += replyStr.length - oldLength;
 
-        if (!refPostIdSet.has(refPostId))
-        {
+        if (!refPostIdSet.has(refPostId)) {
             refPostIdSet.add(refPostId);
             // Добавление ссылки на текущий пост в ответы другого поста
             // В HTML:
             let refPostRefs =
                 document.getElementById('hidden_refmap-' + refPostId) ||
                 document.getElementById('refmap-' + refPostId);
-            if (refPostRefs != null)
-            {
+            if (refPostRefs != null) {
                 refPostRefs.style = "display: block;";
                 refPostRefs.appendChild(createElementFromHTML(createReplyLink(postId)));
 
                 // В Object (для всплывающих постов):
                 let refPost = thread.getPostsObj()[refPostId];
-                if (refPost)
-                {
-                    if (refPost.replies == undefined)
-                    {
+                if (refPost) {
+                    if (refPost.replies == undefined) {
                         refPost.replies = new Array();
                     }
                     refPost.replies.push(postId);
@@ -823,82 +764,72 @@ function addReplyLinks(postId, text)
     }
 }
 
-function renderHiddenPost(postId, postResult)
-{
+function renderHiddenPost(postId, postResult) {
     addHiddenPostToHtml(postId, postResult);
     addReplyLinks(postId, postResult.post.message);
     addHiddenPostToObj(postId); // Текст скрытопоста берется из HTML
 }
 
-async function unzipPostData(zipData)
-{
+async function unzipPostData(zipData) {
     let zip = new JSZip();
 
     let postMessage = '';
     let files = [];
     let filesCount = 0;
-    try
-    {
+    try {
         let archive = await zip.loadAsync(zipData);
 
-        for (const filename in archive.files)
-        {
+        for (const filename in archive.files) {
             filesCount++;
             if (filesCount > MAX_FILES_COUNT) break;
 
-            if (filename == '_post.txt')
-            {
+            if (filename == '_post.txt') {
                 postMessage = await archive.file(filename).async('string');
-                if (postMessage.length > MESSAGE_MAX_LENGTH)
-                {
+                if (postMessage.length > MESSAGE_MAX_LENGTH) {
                     postMessage = postMessage.substring(0, MESSAGE_MAX_LENGTH) +
-                        '...(часть сообщения обрезана, смотри файл '+filename+')';
+                        '...(часть сообщения обрезана, смотри файл ' + filename + ')';
                     let postMessageFileData = await archive.file(filename).async('blob');
-                    files.push({'name': filename, 'data': postMessageFileData});
+                    files.push({ 'name': filename, 'data': postMessageFileData });
                 }
             }
-            else
-            {
+            else {
                 let fileData = await archive.file(filename).async('blob');
-                files.push({'name': filename, 'data': fileData});
+                files.push({ 'name': filename, 'data': fileData });
             }
         }
     }
-    catch (e)
-    {
+    catch (e) {
         console.log('HiddenThread: Ошибка при распаковке архива: ' + e + ' stack:\n' + e.stack);
     }
 
-    return {'message': postMessage, 'files': files};
+    return { 'message': postMessage, 'files': files };
 }
 
-async function verifyPostData(data)
-{
+async function verifyPostData(data) {
     let keySigPair = [data.subarray(BLOCK_SIZE, BLOCK_SIZE + PUBLIC_KEY_SIZE),
-                      // Копируем сигнатуру
-                      new Uint8Array(data.subarray(BLOCK_SIZE + PUBLIC_KEY_SIZE,
-                                                   BLOCK_SIZE + PUBLIC_KEY_SIZE + SIGNATURE_SIZE))];
+    // Копируем сигнатуру
+    new Uint8Array(data.subarray(BLOCK_SIZE + PUBLIC_KEY_SIZE,
+        BLOCK_SIZE + PUBLIC_KEY_SIZE + SIGNATURE_SIZE))];
 
     // Обнуляем поле с сигнатурой, чтобы получить корректный хэш при проверке
     data.set(new Uint8Array(SIGNATURE_SIZE), BLOCK_SIZE + PUBLIC_KEY_SIZE);
 
     let isVerified = false;
-    try
-    {
+    try {
         isVerified = await verify(keySigPair[0], keySigPair[1], data);
     }
-    catch (e)
-    {
+    catch (e) {
         console.log('HiddenThread: Ошибка при проверке подписи: ' + e + ' stack:\n' + e.stack);
     }
-    let verifyResult = {'publicKey': arrayToBase58(keySigPair[0]),
-                        'signature': arrayToBase58(keySigPair[1]),
-                        'isVerified': isVerified};
+    let verifyResult = {
+        'publicKey': arrayToBase58(keySigPair[0]),
+        'signature': arrayToBase58(keySigPair[1]),
+        'isVerified': isVerified
+    };
     return verifyResult;
 }
 
-function parseHeader(header)
-{
+function parseHeader(header) {
     return {
         'magic': new TextDecoder().decode(header.subarray(0, 2)),
         'version': header[2] + (header[3] << 8),
@@ -908,26 +839,22 @@ function parseHeader(header)
     };
 }
 
-async function decryptData(password, imageArray, dataOffset)
-{
+async function decryptData(password, imageArray, dataOffset) {
     // Извлекаем IV и первый блок AES
     let hiddenDataHeader = new Uint8Array(dataOffset + IV_SIZE + BLOCK_SIZE);
     extractDataFromArray(imageArray, hiddenDataHeader);
     hiddenDataHeader = hiddenDataHeader.subarray(dataOffset);
     let dataHeader = null;
-    try
-    {
+    try {
         dataHeader = await decrypt(password, hiddenDataHeader, true);
     }
-    catch (e)
-    {
+    catch (e) {
         //console.log('Не удалось расшифровать заголовок, либо неверный пароль, либо это не скрытопост: ' + e);
         return null;
     }
 
     let header = parseHeader(dataHeader);
-    if (header.magic != 'ht')
-    {
+    if (header.magic != 'ht') {
         console.log('HiddenThread: Неверная сигнатура: ' + header.magic);
         return null;
     }
@@ -940,8 +867,7 @@ async function decryptData(password, imageArray, dataOffset)
     let maxHiddenDataLength = imageArray.length / 4 * 3;
     let hiddenDataLength = IV_SIZE + header.blocksCount * BLOCK_SIZE;
     console.log('HiddenThread: hiddenDataLength (+IV) ' + hiddenDataLength);
-    if (hiddenDataLength > maxHiddenDataLength)
-    {
+    if (hiddenDataLength > maxHiddenDataLength) {
         console.log('HiddenThread: blocksCount * BLOCK_SIZE: ' + (header.blocksCount * BLOCK_SIZE) + ' > maxHiddenDataLength: ' + maxHiddenDataLength);
         return null;
     }
@@ -952,12 +878,10 @@ async function decryptData(password, imageArray, dataOffset)
     hiddenData = hiddenData.subarray(dataOffset);
 
     let decryptedData = null;
-    try
-    {
+    try {
         decryptedData = await decrypt(password, hiddenData);
     }
-    catch (e)
-    {
+    catch (e) {
         //console.log('HiddenThread: Не удалось расшифровать данные: ' + e);
         return null;
     }
@@ -967,8 +891,7 @@ async function decryptData(password, imageArray, dataOffset)
     };
 }
 
-async function loadPostFromImage(img, password, privateKey)
-{
+async function loadPostFromImage(img, password, privateKey) {
     let canvas = document.createElement('canvas');
     canvas.width = img.width;
     canvas.height = img.height;
@@ -979,8 +902,7 @@ async function loadPostFromImage(img, password, privateKey)
     // Пробуем расшифровать как публичный пост
     let isPrivate = false;
     let decryptedData = await decryptData(password, imageData.data, 0);
-    if (decryptedData == null && privateKey.length > 0)
-    {
+    if (decryptedData == null && privateKey.length > 0) {
         isPrivate = true;
         // Извлекаем одноразовый публичный ключ
         let hiddenOneTimePublicKey = new Uint8Array(PUBLIC_KEY_SIZE);
@@ -989,17 +911,14 @@ async function loadPostFromImage(img, password, privateKey)
         let oneTimePublicKey = arrayToBase58(hiddenOneTimePublicKey);
 
         let secretPassword = null
-        try
-        {
+        try {
             secretPassword = await deriveSecretKey(privateKey, oneTimePublicKey);
         }
-        catch (e)
-        {
+        catch (e) {
             // console.log('HiddenThread: Не удалось сгенерировать секрет: ' + e);
         }
 
-        if (secretPassword != null)
-        {
+        if (secretPassword != null) {
             // Пробуем расшифровать как приватный пост
             decryptedData = await decryptData(secretPassword, imageData.data, PUBLIC_KEY_SIZE);
         }
@@ -1010,13 +929,11 @@ async function loadPostFromImage(img, password, privateKey)
 
     let zipOffset = null;
     let verifyResult = null;
-    if (decryptedData.header.type == SIGNED_POST_TYPE)
-    {
+    if (decryptedData.header.type == SIGNED_POST_TYPE) {
         verifyResult = await verifyPostData(decryptedData.data);
         zipOffset = BLOCK_SIZE + PUBLIC_KEY_SIZE + SIGNATURE_SIZE;
     }
-    else
-    {
+    else {
         zipOffset = BLOCK_SIZE;
     }
 
@@ -1030,8 +947,7 @@ async function loadPostFromImage(img, password, privateKey)
     };
 }
 
-function loadHiddenPosts()
-{
+function loadHiddenPosts() {
     if (window.gLoadedHiddenPosts == undefined) {
         // Список id всех просмотренных постов
         window.gLoadedHiddenPosts = new Set();
@@ -1041,105 +957,100 @@ function loadHiddenPosts()
     let thread = window.Post(threadId);
     let postIdList = thread.threadPosts();
 
-    for (let i = 0; i < postIdList.length; i++)
-    {
-        if (!window.gLoadedHiddenPosts.has(postIdList[i]))
-        {
-            window.gLoadedHiddenPosts.add(postIdList[i]);
-
-            //if (postIdList[i] != 111 ) continue;
-
-            let postAjax = thread.getPostsObj()[String(postIdList[i])].ajax;
-            if (!postAjax) continue;
-
-            let postFiles = postAjax.files;
-            if (postFiles.length > 0 && postFiles[0].path.endsWith('.png'))
-            {
-                let url = postFiles[0].path;
-                let postId = postIdList[i];
-                let img = new Image();
-                img.onload = (function(){
-                    let c = document.getElementById('imagesLoadedCount')
-                    c.textContent = String(parseInt(c.textContent) + 1);
-                    console.log('HiddenThread: loading post ' + postIdList[i] + ' ' + url);
-
-                    loadPostFromImage(img,
-                                      document.getElementById('hiddenThreadPassword').value,
-                                      document.getElementById('privateKey').value)
-                    .then(function(postResult) {
-                        if (postResult == null) return;
-                        let c = document.getElementById('hiddenPostsLoadedCount')
-                        c.textContent = String(parseInt(c.textContent) + 1);
-                        renderHiddenPost(postId, postResult);
-                    });
-                });
-                img.setAttribute("src", url);
-
-                let c = document.getElementById('imagesCount')
-                c.textContent = String(parseInt(c.textContent) + 1);
-            }
+    for (let i = 0; i < postIdList.length; i++) {
+        if (window.gLoadedHiddenPosts.has(postIdList[i])) {
+            continue;
         }
+        window.gLoadedHiddenPosts.add(postIdList[i]);
+
+        let postAjax = thread.getPostsObj()[String(postIdList[i])].ajax;
+        if (!postAjax) continue;
+
+        let postFiles = postAjax.files;
+        if (!(postFiles.length > 0 && postFiles[0].path.endsWith('.png'))) {
+            continue;
+        }
+        let url = postFiles[0].path;
+        let postId = postIdList[i];
+        let img = new Image();
+        img.onload = (function () {
+            let c = document.getElementById('imagesLoadedCount')
+            c.textContent = String(parseInt(c.textContent) + 1);
+            console.log('HiddenThread: loading post ' + postIdList[i] + ' ' + url);
+
+            loadPostFromImage(img,
+                document.getElementById('hiddenThreadPassword').value,
+                document.getElementById('privateKey').value)
+                .then(function (postResult) {
+                    if (postResult == null) return;
+                    let c = document.getElementById('hiddenPostsLoadedCount')
+                    c.textContent = String(parseInt(c.textContent) + 1);
+                    renderHiddenPost(postId, postResult);
+                });
+        });
+        img.setAttribute("src", url);
+
+        let c = document.getElementById('imagesCount')
+        c.textContent = String(parseInt(c.textContent) + 1);
     }
 }
 
 
-function createInterface()
-{
+function createInterface() {
     let hiddenPostDiv = document.createElement('div');
     hiddenPostDiv.id = 'hiddenPostDiv';
     hiddenPostDiv.innerHTML =
-'<hr>'+
-'    <div style="font-size:x-large;text-align:center;">Скрытотред v0.1</div>'+
-'    <div style="padding:5px;">'+
-'        <span style="padding-right: 5px;">Пароль:</span>'+
-'        <input id="hiddenThreadPassword">'+
-'        <input id="loadHiddenPostsButton" type="button" style="padding: 5px;" value="Загрузить скрытопосты">'+
-//'        <input id="clearLoadedPosts" type="button" style="padding: 5px;" value="X">'+
-'    </div>'+
-'    <div style="padding:5px;text-align:center;">'+
-//'        <span id="loadingStatus" style="display: none">Загрузка...</span>'+
-//'        <br>'+
-'        Загружено картинок: <span id="imagesLoadedCount">0</span>/<span id="imagesCount">0</span>'+
-'        <br>'+
-'        Загружено скрытопостов: <span id="hiddenPostsLoadedCount">0</span>'+
-'    </div>'+
-'    <textarea id="hiddenPostInput" placeholder="Пиши скрытый текст тут" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;" rows="10"></textarea>'+
-'    <div id="hiddenFilesDiv" style="padding: 5px;">'+
-'        <span>Выбери скрытые файлы: </span>'+
-'        <input id="hiddenFilesInput" type="file" multiple="true">'+
-'        <br>'+
-'        <span>Выбери картинку-контейнер: </span>'+
-'        <input id="hiddenContainerInput" type="file">'+
-'        <input id="hiddenFilesClearButton" type="button" value="Очистить список файлов">'+
-'    </div>'+
-'    <div style="padding: 5px;">'+
-'        <div style="font-size:large;text-align:center;">Подписать пост</div>'+
-'        Приватный ключ (ECDSA p256, base58): <br>'+
-'        <input id="privateKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">'+
-'        <br>'+
-'        Публичный ключ: <br>'+
-'        <input id="publicKey" readonly style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">'+
-'        <br>'+
-'        <div align="center">'+
-'            <input id="generateKeyPairButton" type="button" style="padding: 5px;" value="Сгенерировать ключи">'+
-'        </div>'+
-'    </div>'+
-'    <div style="padding: 5px;">'+
-'        <div style="font-size:large;text-align:center;">Приватный пост</div>'+
-'        Публичный ключ получателя: <br>'+
-'        <input id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">'+
-'    </div>'+
-'    <br>'+
-'    <div align="center">'+
-'        <input id="createHiddenPostButton" type="button" value="Создать картинку со скрытопостом" style="padding: 5px;">'+
-'    </div>'+
-'    <div id="imageContainerDiv"></div>'+
-'    <hr>';
+        '<hr>' +
+        '    <div style="font-size:x-large;text-align:center;">Скрытотред v0.1</div>' +
+        '    <div style="padding:5px;">' +
+        '        <span style="padding-right: 5px;">Пароль:</span>' +
+        '        <input id="hiddenThreadPassword">' +
+        '        <input id="loadHiddenPostsButton" type="button" style="padding: 5px;" value="Загрузить скрытопосты">' +
+        //'        <input id="clearLoadedPosts" type="button" style="padding: 5px;" value="X">'+
+        '    </div>' +
+        '    <div style="padding:5px;text-align:center;">' +
+        //'        <span id="loadingStatus" style="display: none">Загрузка...</span>'+
+        //'        <br>'+
+        '        Загружено картинок: <span id="imagesLoadedCount">0</span>/<span id="imagesCount">0</span>' +
+        '        <br>' +
+        '        Загружено скрытопостов: <span id="hiddenPostsLoadedCount">0</span>' +
+        '    </div>' +
+        '    <textarea id="hiddenPostInput" placeholder="Пиши скрытый текст тут" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;" rows="10"></textarea>' +
+        '    <div id="hiddenFilesDiv" style="padding: 5px;">' +
+        '        <span>Выбери скрытые файлы: </span>' +
+        '        <input id="hiddenFilesInput" type="file" multiple="true">' +
+        '        <br>' +
+        '        <span>Выбери картинку-контейнер: </span>' +
+        '        <input id="hiddenContainerInput" type="file">' +
+        '        <input id="hiddenFilesClearButton" type="button" value="Очистить список файлов">' +
+        '    </div>' +
+        '    <div style="padding: 5px;">' +
+        '        <div style="font-size:large;text-align:center;">Подписать пост</div>' +
+        '        Приватный ключ (ECDSA p256, base58): <br>' +
+        '        <input id="privateKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">' +
+        '        <br>' +
+        '        Публичный ключ: <br>' +
+        '        <input id="publicKey" readonly style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">' +
+        '        <br>' +
+        '        <div align="center">' +
+        '            <input id="generateKeyPairButton" type="button" style="padding: 5px;" value="Сгенерировать ключи">' +
+        '        </div>' +
+        '    </div>' +
+        '    <div style="padding: 5px;">' +
+        '        <div style="font-size:large;text-align:center;">Приватный пост</div>' +
+        '        Публичный ключ получателя: <br>' +
+        '        <input id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">' +
+        '    </div>' +
+        '    <br>' +
+        '    <div align="center">' +
+        '        <input id="createHiddenPostButton" type="button" value="Создать картинку со скрытопостом" style="padding: 5px;">' +
+        '    </div>' +
+        '    <div id="imageContainerDiv"></div>' +
+        '    <hr>';
 
     document.getElementById('postform').appendChild(hiddenPostDiv);
 
-    document.getElementById('loadHiddenPostsButton').onclick = function()
-    {
+    document.getElementById('loadHiddenPostsButton').onclick = function () {
         loadHiddenPosts();
     }
     // document.getElementById('clearLoadedPosts').onclick = function()
@@ -1149,41 +1060,37 @@ function createInterface()
     //     document.getElementById('imagesLoadedCount').textContent = '0';
     //     document.getElementById('hiddenPostsLoadedCount').textContent = '0';
     // }
-    document.getElementById('hiddenFilesClearButton').onclick = function() {
+    document.getElementById('hiddenFilesClearButton').onclick = function () {
         document.getElementById('hiddenFilesInput').value = null;
     }
-    document.getElementById('createHiddenPostButton').onclick = function() {
+    document.getElementById('createHiddenPostButton').onclick = function () {
         createHiddenPost();
     }
-    document.getElementById('generateKeyPairButton').onclick = function() {
+    document.getElementById('generateKeyPairButton').onclick = function () {
         generateKeyPair()
-        .then(function(pair){
-            document.getElementById('privateKey').value = pair[0];
-            document.getElementById('publicKey').value = pair[1];
-        });
+            .then(function (pair) {
+                document.getElementById('privateKey').value = pair[0];
+                document.getElementById('publicKey').value = pair[1];
+            });
     }
-    document.getElementById('privateKey').oninput = function() {
+    document.getElementById('privateKey').oninput = function () {
         let privateKey = document.getElementById('privateKey').value;
         let publicKeyArray = null;
-        try
-        {
+        try {
             publicKeyArray = importPublicKeyArrayFromPrivateKey(privateKey);
         }
-        catch (e) {}
+        catch (e) { }
 
-        if (publicKeyArray && publicKeyArray.length > 0)
-        {
+        if (publicKeyArray && publicKeyArray.length > 0) {
             document.getElementById('publicKey').value = arrayToBase58(publicKeyArray);
         }
-        else
-        {
+        else {
             document.getElementById('publicKey').value = '';
         }
     }
 }
 
-(function()
-{
+(function () {
     'use strict';
     createInterface();
 })();
