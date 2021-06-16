@@ -950,7 +950,6 @@ async function loadPostFromImage(img, password, privateKey) {
 
 /* Перепроверить все посты */
 function reloadHiddenPosts() {
-    window.gLoadedHiddenPosts = new Set();
     loadHiddenThread();
 }
 
