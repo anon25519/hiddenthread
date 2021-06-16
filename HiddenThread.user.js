@@ -1104,7 +1104,8 @@ function createInterface()
                     <input id="hiddenFilesInput" type="file" multiple="true" />
                     <span>Выбери картинку-контейнер: </span>
                     <input id="hiddenContainerInput" type="file" />
-                    <input id="hiddenFilesClearButton" type="button" value="Очистить список файлов" />
+                    <br>
+                    <input id="hiddenFilesClearButton" class="mt-1" type="button" value="Очистить список файлов" />
                 </div>
                 <div style="padding: 5px;">
                     <div style="font-size:large;text-align:center;">Подписать пост</div>
@@ -1122,7 +1123,7 @@ function createInterface()
                         style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
                     />
                     <br>
-                    <div align="center">
+                    <div align="center" class="mt-1">
                         <input id="generateKeyPairButton" type="button" style="padding: 5px;" value="Сгенерировать ключи" />
                     </div>
                 </div>
@@ -1140,6 +1141,26 @@ function createInterface()
             <hr>
         </div>
     `
+    let style = document.createElement("style")
+    let css = `
+        #hiddenPostDiv .mt-1 { margin-top: 1em; }
+        #hiddenPostDiv input, textarea {
+            border: 1px solid var(--theme_default_btnborder);
+            background: var(--theme_default_altbtnbg);
+            color: var(--theme_default_btntext);
+        }
+        #hiddenPostDiv input[type=button] {
+            color: var(--theme_default_btntext);
+        }
+    `
+    if (style.styleSheet){
+        // This is required for IE8 and below.
+        style.styleSheet.cssText = css;
+    } else {
+        style.appendChild(document.createTextNode(css));
+    }
+    document.head.appendChild(style)
+
     // render
     document.getElementById('postform').insertAdjacentHTML("beforeend", formTemplate);
 
