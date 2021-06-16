@@ -19,6 +19,9 @@ const SIGNED_POST_TYPE = 1;
 const MESSAGE_MAX_LENGTH = 30000
 const MAX_FILES_COUNT = 100;
 
+const CURRENT_VERSION = "0.2";
+const VERSION_SOURCE = "https://raw.githubusercontent.com/diademoff/hiddenthread/main/version.info";
+
 /*!
 Библиотеки:
 https://raw.githubusercontent.com/Stuk/jszip/master/dist/jszip.min.js
@@ -983,6 +986,25 @@ function getFileName() {
     return fileTyped.endsWith('.png') ? fileTyped : `${fileTyped}.png`
 }
 
+function CheckVersion() {
+    var request = new XMLHttpRequest();
+    s = "https://raw.githubusercontent.com/diademoff/hiddenthread/main/README.md";
+    request.open("GET", s);
+    request.onreadystatechange = function() {
+    if (request.readyState === 4 && request.status === 200) {
+        console.log(`Актуальная версия: ${request.responseText}`);
+        if( CURRENT_VERSION === request.responseText){
+            document.getElementById('versionInfo').style = "color: green";
+            document.getElementById('versionInfo').textContent = "У вас актуальная версия скрипта";
+        }else{
+            document.getElementById('versionInfo').style = "color: red";
+            document.getElementById('versionInfo').textContent = "Ваша версия скрипта устарела";
+        }
+    }
+    };
+    request.send(null); // Send the request now
+}
+
 
 function createInterface() {
     let hiddenPostDiv = document.createElement('div');
@@ -1033,6 +1055,9 @@ function createInterface() {
         '        <input id="createHiddenPostButton" type="button" value="Создать картинку со скрытопостом" style="padding: 5px;">' +
         '    </div>' +
         '    <div id="imageContainerDiv"></div>' +
+        `    <div style="display: flex; justify-content: center;">
+                <span id="versionInfo"></span>
+             </div>` +
         '    <hr>';
 
     document.getElementById('postform').appendChild(hiddenPostDiv);
@@ -1110,3 +1135,5 @@ target.addEventListener("DOMNodeInserted", function (event) {
         window.gLoadedHiddenPosts.add(post_id);
     }
 }, false);
+
+CheckVersion();
