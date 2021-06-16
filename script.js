@@ -970,6 +970,7 @@ function loadPost(postId, file_url) {
             .then(function (postResult) {
                 if (postResult == null) return;
                 renderHiddenPost(postId, postResult);
+                document.getElementById("hiddenPostNotify").textContent = "Есть скрытые посты!";
                 window.gLoadedHiddenPosts.add(postId);
             });
     });
@@ -989,23 +990,30 @@ function getFileName() {
 function CheckVersion() {
     var request = new XMLHttpRequest();
     request.open("GET", VERSION_SOURCE);
-    request.onreadystatechange = function() {
-    if (request.readyState === 4 && request.status === 200) {
-        console.log(`Актуальная версия: ${request.responseText}`);
-        if( CURRENT_VERSION === request.responseText){
-            document.getElementById('versionInfo').style = "color: green";
-            document.getElementById('versionInfo').textContent = "У вас актуальная версия скрипта";
-        }else{
-            document.getElementById('versionInfo').style = "color: red";
-            document.getElementById('versionInfo').textContent = "Ваша версия скрипта устарела";
+    request.onreadystatechange = function () {
+        if (request.readyState === 4 && request.status === 200) {
+            console.log(`Актуальная версия: ${request.responseText}`);
+            if (CURRENT_VERSION === request.responseText) {
+                document.getElementById('versionInfo').style = "color: green";
+                document.getElementById('versionInfo').textContent = "У вас актуальная версия скрипта";
+            } else {
+                document.getElementById('versionInfo').style = "color: red";
+                document.getElementById('versionInfo').textContent = "Ваша версия скрипта устарела";
+            }
         }
-    }
     };
     request.send(null); // Send the request now
 }
+function addHiddenPostNotify() {
+    let notifyNode = document.createElement("span");
+    notifyNode.style = "color: green; position: fixed; top: 2px; right: 5px;";
+    notifyNode.id = "hiddenPostNotify";
 
+    document.getElementsByTagName('body')[0].appendChild(notifyNode);
+}
 
 function createInterface() {
+    addHiddenPostNotify();
     let hiddenPostDiv = document.createElement('div');
     hiddenPostDiv.id = 'hiddenPostDiv';
     hiddenPostDiv.innerHTML =
