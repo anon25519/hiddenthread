@@ -951,8 +951,7 @@ async function loadPostFromImage(img, password, privateKey) {
 /* Перепроверить все посты */
 function reloadHiddenPosts() {
     window.gLoadedHiddenPosts = new Set();
-
-    /* Посты обновятся основным циклом */
+    loadHiddenThread();
 }
 
 /*
@@ -1102,20 +1101,10 @@ function createInterface() {
     }
 }
 
-createInterface();
-
-/* Отслеживание новых постов */
-
-if (window.gLoadedHiddenPosts == undefined) {
-    // Список id всех просмотренных постов
-    window.gLoadedHiddenPosts = new Set();
-}
-
-// Выбираем элемент
-var target = document.querySelector('#posts-form');
-
-target.addEventListener("DOMNodeInserted", function (event) {
-    // works like while-true loop
+/*
+Просмотреть все посты и попробовать расшифровать
+*/
+function loadHiddenThread() {
     let threadId = window.thread.id;
     let thread = window.Post(threadId);
     let postIdList = thread.threadPosts();
@@ -1141,6 +1130,23 @@ target.addEventListener("DOMNodeInserted", function (event) {
 
         window.gLoadedHiddenPosts.add(post_id);
     }
+}
+
+createInterface();
+
+/* Отслеживание новых постов */
+
+if (window.gLoadedHiddenPosts == undefined) {
+    // Список id всех просмотренных постов
+    window.gLoadedHiddenPosts = new Set();
+}
+
+// Выбираем элемент
+var target = document.querySelector('#posts-form');
+
+target.addEventListener("DOMNodeInserted", function (event) {
+    // works like while-true loop
+    loadHiddenThread();
 }, false);
 
 CheckVersion();
