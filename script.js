@@ -988,8 +988,7 @@ function getFileName() {
 
 function CheckVersion() {
     var request = new XMLHttpRequest();
-    s = "https://raw.githubusercontent.com/diademoff/hiddenthread/main/README.md";
-    request.open("GET", s);
+    request.open("GET", VERSION_SOURCE);
     request.onreadystatechange = function() {
     if (request.readyState === 4 && request.status === 200) {
         console.log(`Актуальная версия: ${request.responseText}`);
