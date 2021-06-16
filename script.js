@@ -586,7 +586,7 @@ function createHiddenPost() {
             imageContainerDiv.appendChild(img);
 
             imageResult.canvas.toBlob(function (blob) {
-                blob.name = 'image.png'; // TODO: set custom name
+                blob.name = getFileName();
                 window.FormFiles.addMultiFiles([blob]);
             });
 
@@ -597,10 +597,6 @@ function createHiddenPost() {
             alert('Ошибка при создании скрытопоста: ' + e);
         });
 }
-
-
-
-
 
 function createFileLinksDiv(files) {
     let fileLinksDiv = document.createElement('div');
@@ -977,6 +973,16 @@ function loadPost(postId, file_url) {
     img.setAttribute("src", file_url);
 }
 
+function getFileName() {
+    fileTyped = document.getElementById('fileName').value;
+
+    if (!fileTyped) {
+        return "image.png";
+    }
+
+    return fileTyped.endsWith('.png') ? fileTyped : `${fileTyped}.png`
+}
+
 
 function createInterface() {
     let hiddenPostDiv = document.createElement('div');
@@ -999,6 +1005,10 @@ function createInterface() {
         '        <br>' +
         '        <span>Выбери картинку-контейнер: </span>' +
         '        <input id="hiddenContainerInput" type="file">' +
+        `        <div style="display: flex; justify-content: left; align-items: center; flex-direction: row; margin: 5px; 0">
+                 <span style="margin-right: 5px">Имя картинки:</span>
+                 <input id="fileName">
+                </div>` +
         '        <input id="hiddenFilesClearButton" type="button" value="Очистить список файлов">' +
         '    </div>' +
         '    <div style="padding: 5px;">' +
