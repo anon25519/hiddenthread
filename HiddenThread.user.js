@@ -287,7 +287,21 @@ https://github.com/pigulla/mersennetwister/blob/5a747d99ef0831e5d1ffddfdbb6ea70f
     return MersenneTwister;
 }));
 
+const STORAGE_KEY = "hiddenThread"
 
+let getStorage = () => {
+    let storage = localStorage.getItem(STORAGE_KEY) || "{}"
+    return JSON.parse(storage)
+}
+let storage = getStorage()
+let setStorage = (value) => {
+    let newStorage = {
+        ...getStorage(),
+        ...value
+    }
+    storage = newStorage
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newStorage))
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Misc
@@ -1304,71 +1318,92 @@ function loadHiddenPosts()
 
 function createInterface()
 {
+    let toggleText = () => {
+        return storage.hide
+            ? "Открыть"
+            : "Закрыть"
+    }
     let formTemplate = `
         <div id="hiddenPostDiv">
             <hr>
-            <div style="font-size:x-large;text-align:center;">Скрытотред v0.1</div>
-            <div style="padding:5px;">
-                <span style="padding-right: 5px;">Пароль:</span>
-                <input id="hiddenThreadPassword" />
-                <input id="loadHiddenPostsButton" type="button" style="padding: 5px;" value="Загрузить скрытопосты" />
-                <!--<input id="clearLoadedPosts" type="button" style="padding: 5px;" value="X" />-->
+            <div style="position: relative; display: flex; justify-content: center; align-items: center">
+                <p style="font-size:x-large;">Скрытотред v0.1</p>
+                <span id="hiddenThreadToggle" style="position: absolute; right: 0; cursor: pointer">${toggleText()}</span>
             </div>
-            <div style="padding:5px;text-align:center;">
-                <!--<span id="loadingStatus" style="display: none">Загрузка...</span>-->
-                Загружено картинок: <span id="imagesLoadedCount">0</span>/<span id="imagesCount">0</span>
-                <br>
-                Загружено скрытопостов: <span id="hiddenPostsLoadedCount">0</span>
-            </div>
-            <textarea
-                id="hiddenPostInput"
-                placeholder="Пиши скрытый текст тут"
-                style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
-                rows="10"
-            ></textarea>
-            <div id="hiddenFilesDiv" style="padding: 5px;">
-                <span>Выбери скрытые файлы: </span>
-                <input id="hiddenFilesInput" type="file" multiple="true" />
-                <br>
-                <span>Выбери картинку-контейнер: </span>
-                <input id="hiddenContainerInput" type="file">
-                <br>
-                <input id="hiddenFilesClearButton" type="button" value="Очистить список файлов">
-            </div>
-            <div style="padding: 5px;">
-                <div style="font-size:large;text-align:center;">Подписать пост</div>
-                Приватный ключ (ECDSA p256, base58): <br>
-                <input
-                    id="privateKey"
+            <div id="hiddenThreadForm" style="display: ${storage.hide ? 'none' : ''}">
+                <div style="padding:5px;">
+                    <span style="padding-right: 5px;">Пароль:</span>
+                    <input id="hiddenThreadPassword" /> 
+                    <input id="loadHiddenPostsButton" type="button" style="padding: 5px;" value="Загрузить скрытопосты" />
+                    <!--<input id="clearLoadedPosts" type="button" style="padding: 5px;" value="X" />-->
+                </div>
+                <div style="padding:5px;text-align:center;">
+                    <!--<span id="loadingStatus" style="display: none">Загрузка...</span>-->
+                    Загружено картинок: <span id="imagesLoadedCount">0</span>/<span id="imagesCount">0</span>
+                    <br>
+                    Загружено скрытопостов: <span id="hiddenPostsLoadedCount">0</span>
+                </div>
+                <textarea
+                    id="hiddenPostInput"
+                    placeholder="Пиши скрытый текст тут"
                     style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
-                />
-                <br>
-                Публичный ключ:
-                <br>
-                <input
-                    id="publicKey"
-                    readonly
-                    style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
-                />
+                    rows="10"
+                ></textarea>
+                <div id="hiddenFilesDiv" style="padding: 5px;">
+                    <span>Выбери скрытые файлы: </span>
+                    <input id="hiddenFilesInput" type="file" multiple="true" />
+                    <span>Выбери картинку-контейнер: </span>
+                    <input id="hiddenContainerInput" type="file">
+                    <input id="hiddenFilesClearButton" type="button" value="Очистить список файлов">
+                </div>
+                <div style="padding: 5px;">
+                    <div style="font-size:large;text-align:center;">Подписать пост</div>
+                    Приватный ключ (ECDSA p256, base58): <br>
+                    <input
+                        id="privateKey"
+                        style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
+                    />
+                    <br>
+                    Публичный ключ:
+                    <br>
+                    <input
+                        id="publicKey"
+                        readonly
+                        style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
+                    />
+                    <br>
+                    <div align="center">
+                        <input id="generateKeyPairButton" type="button" style="padding: 5px;" value="Сгенерировать ключи" />
+                    </div>
+                </div>
+                <div style="padding: 5px;">
+                    <div style="font-size:large;text-align:center;">Приватный пост</div>
+                    Публичный ключ получателя: <br>
+                    <input id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">
+                </div>
                 <br>
                 <div align="center">
-                    <input id="generateKeyPairButton" type="button" style="padding: 5px;" value="Сгенерировать ключи" />
+                    <input id="createHiddenPostButton" type="button" value="Создать картинку со скрытопостом" style="padding: 5px;">
                 </div>
+                <div id="imageContainerDiv" />
             </div>
-            <div style="padding: 5px;">
-                <div style="font-size:large;text-align:center;">Приватный пост</div>
-                Публичный ключ получателя: <br>
-                <input id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">
-            </div>
-            <br>
-            <div align="center">
-                <input id="createHiddenPostButton" type="button" value="Создать картинку со скрытопостом" style="padding: 5px;">
-            </div>
-            <div id="imageContainerDiv" />
             <hr>
         </div>
     `
+    // render
     document.getElementById('postform').insertAdjacentHTML("beforeend", formTemplate);
+
+    // listeners
+
+    let toggleEl = document.getElementById("hiddenThreadToggle")
+    toggleEl.onclick = () => {
+        setStorage({ hide: !storage.hide })
+        toggleEl.textContent = toggleText()
+        let formEl = document.getElementById("hiddenThreadForm")
+        formEl.style.display = storage.hide
+            ? "none"
+            : ""
+    }
 
     document.getElementById('loadHiddenPostsButton').onclick = loadHiddenPosts
 
