@@ -19,10 +19,6 @@ const SIGNED_POST_TYPE = 1;
 const MESSAGE_MAX_LENGTH = 30000
 const MAX_FILES_COUNT = 100;
 
-/* Раньше в меню скрипта было текстовое поле с
-вводом пароля, сейчас используется статический пароль */
-const PASSWORD_STATIC = "2ch";
-
 /*!
 Библиотеки:
 https://raw.githubusercontent.com/Stuk/jszip/master/dist/jszip.min.js
@@ -577,7 +573,7 @@ function createHiddenPost() {
     createHiddenPostImpl(containers[0],
         document.getElementById('hiddenPostInput').value,
         document.getElementById('hiddenFilesInput').files,
-        PASSWORD_STATIC,
+        document.getElementById('hiddenThreadPassword').value,
         document.getElementById('privateKey').value,
         document.getElementById('otherPublicKey').value)
         .then(function (imageResult) {
@@ -970,7 +966,7 @@ function loadPost(postId, file_url) {
         console.log('HiddenThread: loading post ' + postId + ' ' + file_url);
 
         loadPostFromImage(img,
-            PASSWORD_STATIC,
+            document.getElementById('hiddenThreadPassword').value,
             document.getElementById('privateKey').value)
             .then(function (postResult) {
                 if (postResult == null) return;
@@ -991,6 +987,11 @@ function createInterface() {
         '    <div style="padding:5px;display: flex; justify-content: center;">' +
         '        <input id="reloadHiddenPostsButton" type="button" style="padding: 5px;" value="Перезагрузить скрытопосты">' +
         '    </div>' +
+        `   <div style="display: flex; justify-content: left; align-items: center; flex-direction: row; margin-bottom: 5px;">
+                <span style="padding-right: 5px;">Пароль:</span>
+                <input id="hiddenThreadPassword">
+                <a target="_blank" style="font-size: small; margin-left: 5px" href="https://github.com/diademoff/hiddenthread">?</a>
+            </div>` +
         '    <textarea id="hiddenPostInput" placeholder="Пиши скрытый текст тут" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;" rows="10"></textarea>' +
         '    <div id="hiddenFilesDiv" style="padding: 5px;">' +
         '        <span>Выбери скрытые файлы: </span>' +
