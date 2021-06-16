@@ -950,6 +950,7 @@ async function loadPostFromImage(img, password, privateKey) {
 
 /* Перепроверить все посты */
 function reloadHiddenPosts() {
+    watchedPosts = new Set();
     loadHiddenThread();
 }
 
@@ -1100,6 +1101,7 @@ function createInterface() {
     }
 }
 
+var watchedPosts = new Set()
 /*
 Просмотреть все посты и попробовать расшифровать
 */
@@ -1110,7 +1112,7 @@ function loadHiddenThread() {
 
     for (let i = 0; i < postIdList.length; i++) {
         const post_id = postIdList[i];
-        if (window.gLoadedHiddenPosts.has(post_id)) {
+        if (window.gLoadedHiddenPosts.has(post_id) || watchedPosts.has(post_id)) {
             continue;
         }
 
@@ -1119,15 +1121,13 @@ function loadHiddenThread() {
 
         let postFiles = postAjax.files;
         if (!(postFiles.length > 0 && postFiles[0].path.endsWith('.png'))) {
-            window.gLoadedHiddenPosts.add(post_id);
             continue;
         }
 
         let url = postFiles[0].path;
         let postId = postIdList[i];
         loadPost(postId, url);
-
-        window.gLoadedHiddenPosts.add(post_id);
+        watchedPosts.add(post_id);
     }
 }
 
