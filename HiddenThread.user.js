@@ -1103,8 +1103,8 @@ function createInterface()
                     <span>Выбери скрытые файлы: </span>
                     <input id="hiddenFilesInput" type="file" multiple="true" />
                     <span>Выбери картинку-контейнер: </span>
-                    <input id="hiddenContainerInput" type="file">
-                    <input id="hiddenFilesClearButton" type="button" value="Очистить список файлов">
+                    <input id="hiddenContainerInput" type="file" />
+                    <input id="hiddenFilesClearButton" type="button" value="Очистить список файлов" />
                 </div>
                 <div style="padding: 5px;">
                     <div style="font-size:large;text-align:center;">Подписать пост</div>
@@ -1166,6 +1166,7 @@ function createInterface()
     // }
     document.getElementById('hiddenFilesClearButton').onclick = function() {
         document.getElementById('hiddenFilesInput').value = null;
+        document.getElementById("hiddenContainerInput").value = null
     }
     document.getElementById('createHiddenPostButton').onclick = function() {
         createHiddenPost();
