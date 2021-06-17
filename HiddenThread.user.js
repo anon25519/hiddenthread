@@ -1189,7 +1189,6 @@ function createInterface()
     // }
     document.getElementById('hiddenFilesClearButton').onclick = function() {
         document.getElementById('hiddenFilesInput').value = null;
-        document.getElementById("hiddenContainerInput").value = null
     }
     document.getElementById('createHiddenPostButton').onclick = function() {
         createHiddenPost();
