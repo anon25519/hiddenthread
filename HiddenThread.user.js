@@ -297,7 +297,7 @@ async function importPublicKey(publicKeyRaw, isForVerify = true) {
             namedCurve: "P-256"
         },
         true,
-        [isForVerify ? 'verify' : '']
+        isForVerify ? ['verify'] : []
     );
     return publicKey;
 }
