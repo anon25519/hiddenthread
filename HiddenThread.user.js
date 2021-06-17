@@ -572,7 +572,9 @@ function createHiddenPost() {
     }
 
     if (!container) {
-        alert('Выбранный файл должен быть JPG или PNG картинкой!');
+        alert(containers.length == 1 ?
+            "Выбранный файл должен быть JPG или PNG картинкой!" :
+            "Хотя бы один из выбранных файлов должен быть JPG или PNG картинкой!");
         return;
     }
 
@@ -795,7 +797,7 @@ async function unzipPostData(zipData) {
                     'mp3': 'audio/mpeg',
                     'pdf': 'application/pdf',
                 };
-                let ext = filename.split('.').pop();
+                let ext = filename.split('.').pop().toLowerCase();
                 if (extMimeDict[ext]) {
                     fileData = fileData.slice(0, fileData.size, extMimeDict[ext]);
                 }
@@ -1192,7 +1194,21 @@ function loadHiddenThread() {
 
     let threadId = window.thread.id;
     let thread = window.Post(threadId);
-    let postIdList = thread.threadPosts();
+
+    let postIdList = null;
+    try {
+        postIdList = thread.threadPosts();
+    }
+    catch (e) {
+        // Если не удалось получить объект треда, берем id и ссылки из HTML
+        var images = document.getElementsByClassName('post__images');
+        for (let img of images) {
+            let postId = img.parentNode.getAttribute('data-num');
+            let url = img.getElementsByClassName('post__image-link')[0].href;
+            loadPost(postId, url);
+        }
+        return;
+    }
 
     // Получить посты, которые нужно просмотреть
     let postsToScan = [];
