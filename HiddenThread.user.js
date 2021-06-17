@@ -1102,7 +1102,9 @@ function createInterface()
                 <div id="hiddenFilesDiv" style="padding: 5px;">
                     <span>Выбери скрытые файлы: </span>
                     <input id="hiddenFilesInput" type="file" multiple="true" />
+                    <br>
                     <span>Выбери картинку-контейнер: </span>
+
                     <input id="hiddenContainerInput" type="file" />
                     <br>
                     <input id="hiddenFilesClearButton" class="mt-1" type="button" value="Очистить список файлов" />
