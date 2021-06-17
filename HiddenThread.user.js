@@ -996,9 +996,9 @@ function loadPost(postId, file_url) {
             document.getElementById('privateKey').value)
             .then(function (postResult) {
                 if (postResult == null) return;
-                renderHiddenPost(postId, postResult);
                 window.gLoadedHiddenPosts.add(postId);
                 document.getElementById("hiddenPostsLoadedCount").textContent = window.gLoadedHiddenPosts.size;
+                renderHiddenPost(postId, postResult);
             });
     });
     img.setAttribute("src", file_url);
@@ -1180,6 +1180,52 @@ function createInterface() {
     }
 }
 
+// Получить посты, которые нужно просмотреть
+function getPostsToScan()
+{
+    let threadId = window.thread.id;
+    let thread = window.Post(threadId);
+    let postsToScan = [];
+
+    let postIdList = null;
+    try {
+        postIdList = thread.threadPosts();
+    }
+    catch (e) {
+        // Если не удалось получить объект треда, берем id и ссылки из HTML
+        var images = document.getElementsByClassName('post__images');
+        for (let img of images) {
+            let url = img.getElementsByClassName('post__image-link')[0].href
+            if (url.endsWith('.png'))
+            {
+                postsToScan.push({
+                    url: url,
+                    postId: img.parentNode.getAttribute('data-num')
+                });
+            }
+        }
+
+        return postsToScan;
+    }
+
+    for (let i = 0; i < postIdList.length; i++) {
+        let postAjax = thread.getPostsObj()[String(postIdList[i])].ajax;
+        if (!postAjax) continue;
+
+        let postFiles = postAjax.files;
+        if (!(postFiles.length > 0 && postFiles[0].path.endsWith('.png'))) {
+            continue;
+        }
+
+        postsToScan.push({
+            url: postFiles[0].path,
+            postId: postIdList[i]
+        });
+    }
+
+    return postsToScan;
+}
+
 var watchedPosts = new Set();
 var postsWithLoadedImages = new Set();
 let scanning = false;
@@ -1192,42 +1238,7 @@ function loadHiddenThread() {
     }
     scanning = true;
 
-    let threadId = window.thread.id;
-    let thread = window.Post(threadId);
-
-    let postIdList = null;
-    try {
-        postIdList = thread.threadPosts();
-    }
-    catch (e) {
-        // Если не удалось получить объект треда, берем id и ссылки из HTML
-        var images = document.getElementsByClassName('post__images');
-        for (let img of images) {
-            let postId = img.parentNode.getAttribute('data-num');
-            let url = img.getElementsByClassName('post__image-link')[0].href;
-            loadPost(postId, url);
-        }
-        return;
-    }
-
-    // Получить посты, которые нужно просмотреть
-    let postsToScan = [];
-
-    for (let i = 0; i < postIdList.length; i++) {
-        let postAjax = thread.getPostsObj()[String(postIdList[i])].ajax;
-        if (!postAjax) continue;
-
-        let postFiles = postAjax.files;
-        if (!(postFiles.length > 0 && postFiles[0].path.endsWith('.png'))) {
-            continue;
-        }
-
-
-        postsToScan.push({
-            url: postFiles[0].path,
-            postId: postIdList[i]
-        });
-    }
+    let postsToScan = getPostsToScan();
 
     document.getElementById("imagesCount").textContent = postsToScan.length.toString();
 
