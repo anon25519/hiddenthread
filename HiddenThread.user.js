@@ -558,13 +558,25 @@ function createHiddenPost() {
         return;
     }
 
-    if (containers[0].type != 'image/png' &&
-        containers[0].type != 'image/jpeg') {
+    let containersNum = new Array(containers.length);
+    for (let i = 0; i < containersNum.length; i++) containersNum[i] = i;
+    shuffleArray(containersNum, containersNum.length, true);
+
+    let container = null;
+    for (let num of containersNum) {
+        if (containers[num].type == 'image/png' ||
+            containers[num].type == 'image/jpeg') {
+            container = containers[num];
+            break;
+        }
+    }
+
+    if (!container) {
         alert('Выбранный файл должен быть JPG или PNG картинкой!');
         return;
     }
 
-    createHiddenPostImpl(containers[0],
+    createHiddenPostImpl(container,
         document.getElementById('hiddenPostInput').value,
         document.getElementById('hiddenFilesInput').files,
         document.getElementById('hiddenThreadPassword').value,
@@ -1054,8 +1066,9 @@ function createInterface() {
                     <span>Выбери скрытые файлы: </span>
                     <input id="hiddenFilesInput" type="file" multiple="true" />
                     <br>
-                    <span>Выбери картинку-контейнер: </span>
-                    <input id="hiddenContainerInput" type="file" />
+                    <span>Выбери картинку-контейнер (из нескольких берется рандомная): </span>
+                    <input id="hiddenContainerInput" type="file" multiple="true" />
+                    <br>
                     <span style="margin-right: 5px">Имя картинки:</span>
                     <input id="fileName">
                     <br>
