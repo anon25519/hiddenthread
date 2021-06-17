@@ -20,42 +20,34 @@ const MESSAGE_MAX_LENGTH = 30000
 const MAX_FILES_COUNT = 100;
 
 const CURRENT_VERSION = "0.2";
-const VERSION_SOURCE = "https://raw.githubusercontent.com/diademoff/hiddenthread/main/version.info";
+const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 
-/*!
-Библиотеки:
-https://raw.githubusercontent.com/Stuk/jszip/master/dist/jszip.min.js
-
-https://raw.githubusercontent.com/indutny/elliptic/43ac7f230069bd1575e1e4a58394a512303ba803/dist/elliptic.min.js
-
-https://raw.githubusercontent.com/pigulla/mersennetwister/5a747d99ef0831e5d1ffddfdbb6ea70f539501d4/src/MersenneTwister.js
-*/
-
-var libs = [
-    "https://cdn.rawgit.com/Stuk/jszip/master/dist/jszip.min.js",
-    "https://cdn.rawgit.com/indutny/elliptic/43ac7f230069bd1575e1e4a58394a512303ba803/dist/elliptic.min.js",
-    "https://cdn.rawgit.com/pigulla/mersennetwister/5a747d99ef0831e5d1ffddfdbb6ea70f539501d4/src/MersenneTwister.js"
-];
-
-// Добавить скрипты
-for (let i = 0; i < libs.length; i++) {
-    const lib = libs[i];
-
-    var type = document.createAttribute("type");
-
-    type.value = 'text/javascript';
-
-    var src = document.createAttribute("src");
-    src.value = lib;
-
-    var scrpt = document.createElement("script");
-    scrpt.setAttributeNode(type);
-    scrpt.setAttributeNode(src);
-
-    var head = document.getElementsByTagName("head")[0];
-    head.appendChild(scrpt);
+const injectLib = (url) => {
+    let lib = document.createElement("script")
+    lib.type = "text/javascript"
+    lib.src = url
+    document.head.appendChild(lib)
 }
 
+injectLib("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js")
+injectLib("https://cdn.jsdelivr.net/npm/mersennetwister@0.2.3/src/MersenneTwister.min.js")
+injectLib("https://cdn.rawgit.com/indutny/elliptic/43ac7f230069bd1575e1e4a58394a512303ba803/dist/elliptic.min.js")
+
+const STORAGE_KEY = "hiddenThread"
+
+let getStorage = () => {
+    let storage = localStorage.getItem(STORAGE_KEY) || "{}"
+    return JSON.parse(storage)
+}
+let storage = getStorage()
+let setStorage = (value) => {
+    let newStorage = {
+        ...getStorage(),
+        ...value
+    }
+    storage = newStorage
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newStorage))
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Misc
@@ -94,7 +86,7 @@ var arrayToBase58 = function (B) {
         n;        //a temporary placeholder variable for the current base58 digit
     for (var i = 0; i < B.length; i++) { //loop through each byte in the input stream
         j = 0,                           //reset the base58 digit iterator
-            c = B[i];                    //set the initial carry amount equal to the current byte amount
+            c = B[i];                        //set the initial carry amount equal to the current byte amount
         s += c || s.length ^ i ? "" : 1; //prepend the result string with a "1" (0 in base58) if the byte stream is zero and non-zero bytes haven't been seen yet (to ensure correct decode length)
         while (j in d || c) {            //start looping through the digits until there are no more digits and no carry amount
             n = d[j];                    //set the placeholder for the current base58 digit
@@ -391,14 +383,13 @@ function hideDataToArray(array, data) {
             array[arrayIndexList[arrayIndex]] &= ~(1 << arrayBitIndex); // Clear bit
             array[arrayIndexList[arrayIndex]] |= bit << arrayBitIndex; // Set bit
             arrayIndex--;
-            if (!(arrayIndex < 0)) {
-                continue;
-            }
-            arrayIndex = arrayIndexList.length - 1;
-            arrayBitIndex++;
-            if (arrayBitIndex == 8 && dataIndex < (data.length - 1)) {
-                throw new Error('Не удалось вместить данные в контейнер, осталось ещё ' +
-                    (data.length - dataIndex - 1) + ' из ' + data.length + ' байт');
+            if (arrayIndex < 0) {
+                arrayIndex = arrayIndexList.length - 1;
+                arrayBitIndex++;
+                if (arrayBitIndex == 8 && dataIndex < (data.length - 1)) {
+                    throw new Error('Не удалось вместить данные в контейнер, осталось ещё ' +
+                        (data.length - dataIndex - 1) + ' из ' + data.length + ' байт');
+                }
             }
         }
     }
@@ -596,7 +587,7 @@ function createHiddenPost() {
             alert('Спрятано ' + imageResult.len + ' байт (занято ' + imageResult.percent + '% изображения)');
         })
         .catch(function (e) {
-            console.log('Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
+            console.log('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
             alert('Ошибка при создании скрытопоста: ' + e);
         });
 }
@@ -963,27 +954,30 @@ function loadPost(postId, file_url) {
     img.onload = (function () {
         console.log('HiddenThread: loading post ' + postId + ' ' + file_url);
 
+        postsWithLoadedImages.add(postId);
+        document.getElementById("imagesLoadedCount").textContent = postsWithLoadedImages.size;
+
         loadPostFromImage(img,
             document.getElementById('hiddenThreadPassword').value,
             document.getElementById('privateKey').value)
             .then(function (postResult) {
                 if (postResult == null) return;
                 renderHiddenPost(postId, postResult);
-                document.getElementById("hiddenPostNotify").textContent = "Есть скрытые посты!";
                 window.gLoadedHiddenPosts.add(postId);
+                document.getElementById("hiddenPostsLoadedCount").textContent = window.gLoadedHiddenPosts.size;
             });
     });
     img.setAttribute("src", file_url);
 }
 
 function getFileName() {
-    fileTyped = document.getElementById('fileName').value;
+    var fileName = document.getElementById('fileName').value;
 
-    if (!fileTyped) {
+    if (!fileName) {
         return "image.png";
     }
 
-    return fileTyped.endsWith('.png') ? fileTyped : `${fileTyped}.png`
+    return fileName.endsWith('.png') ? fileName : `${fileName}.png`
 }
 
 function CheckVersion() {
@@ -991,7 +985,7 @@ function CheckVersion() {
     request.open("GET", VERSION_SOURCE);
     request.onreadystatechange = function () {
         if (request.readyState === 4 && request.status === 200) {
-            console.log(`Актуальная версия: ${request.responseText}`);
+            console.log(`Актуальная версия HiddenThread: ${request.responseText}`);
             if (CURRENT_VERSION === request.responseText) {
                 document.getElementById('versionInfo').style = "color: green";
                 document.getElementById('versionInfo').textContent = "У вас актуальная версия скрипта";
@@ -1003,74 +997,124 @@ function CheckVersion() {
     };
     request.send(null); // Send the request now
 }
-function addHiddenPostNotify() {
-    let notifyNode = document.createElement("span");
-    notifyNode.style = "color: green; position: fixed; top: 2px; right: 5px;";
-    notifyNode.id = "hiddenPostNotify";
-
-    document.getElementsByTagName('body')[0].appendChild(notifyNode);
-}
 
 function createInterface() {
-    addHiddenPostNotify();
-    let hiddenPostDiv = document.createElement('div');
-    hiddenPostDiv.id = 'hiddenPostDiv';
-    hiddenPostDiv.innerHTML =
-        '<hr>' +
-        '    <div style="font-size:x-large;text-align:center;">Скрытотред v0.2</div>' +
-        '    <div style="padding:5px;display: flex; justify-content: center;">' +
-        '        <input id="reloadHiddenPostsButton" type="button" style="padding: 5px;" value="Перезагрузить скрытопосты">' +
-        '    </div>' +
-        `   <div style="display: flex; justify-content: left; align-items: center; flex-direction: row; margin-bottom: 5px;">
-                <span style="padding-right: 5px;">Пароль:</span>
-                <input id="hiddenThreadPassword">
-                <a target="_blank" style="font-size: small; margin-left: 5px" href="https://github.com/diademoff/hiddenthread">?</a>
-            </div>` +
-        '    <textarea id="hiddenPostInput" placeholder="Пиши скрытый текст тут" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;" rows="10"></textarea>' +
-        '    <div id="hiddenFilesDiv" style="padding: 5px;">' +
-        '        <span>Выбери скрытые файлы: </span>' +
-        '        <input id="hiddenFilesInput" type="file" multiple="true">' +
-        '        <br>' +
-        '        <span>Выбери картинку-контейнер: </span>' +
-        '        <input id="hiddenContainerInput" type="file">' +
-        `        <div style="display: flex; justify-content: left; align-items: center; flex-direction: row; margin: 5px; 0">
-                 <span style="margin-right: 5px">Имя картинки:</span>
-                 <input id="fileName">
-                </div>` +
-        '        <input id="hiddenFilesClearButton" type="button" value="Очистить список файлов">' +
-        '    </div>' +
-        '    <div style="padding: 5px;">' +
-        '        <div style="font-size:large;text-align:center;">Подписать пост</div>' +
-        '        Приватный ключ (ECDSA p256, base58): <br>' +
-        '        <input id="privateKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">' +
-        '        <br>' +
-        '        Публичный ключ: <br>' +
-        '        <input id="publicKey" readonly style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">' +
-        '        <br>' +
-        '        <div align="center" style="margin-top: 8px">' +
-        '            <input id="generateKeyPairButton" type="button" style="padding: 5px;" value="Сгенерировать ключи">' +
-        '        </div>' +
-        '    </div>' +
-        '    <div style="padding: 5px;">' +
-        '        <div style="font-size:large;text-align:center;">Приватный пост</div>' +
-        '        Публичный ключ получателя: <br>' +
-        '        <input id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">' +
-        '    </div>' +
-        '    <br>' +
-        '    <div align="center">' +
-        '        <input id="createHiddenPostButton" type="button" value="Создать картинку со скрытопостом" style="padding: 5px;">' +
-        '    </div>' +
-        '    <div id="imageContainerDiv"></div>' +
-        `    <div style="display: flex; justify-content: center;">
-                <span id="versionInfo"></span>
-             </div>` +
-        '    <hr>';
-
-    document.getElementById('postform').appendChild(hiddenPostDiv);
-
-    document.getElementById('reloadHiddenPostsButton').onclick = function () {
-        reloadHiddenPosts();
+    let toggleText = () => {
+        return storage.hide
+            ? "Открыть"
+            : "Закрыть"
     }
+    let formTemplate = `
+        <div id="hiddenPostDiv">
+            <hr>
+            <div style="position: relative; display: flex; justify-content: center; align-items: center">
+                <p style="font-size:x-large;">Скрытотред v0.2</p>
+                <span id="hiddenThreadToggle" style="position: absolute; right: 0; cursor: pointer">${toggleText()}</span>
+            </div>
+            <div id="hiddenThreadForm" style="display: ${storage.hide ? 'none' : ''}">
+                <div style="padding:5px;">
+                    <span style="padding-right: 5px;">Пароль:</span>
+                    <input id="hiddenThreadPassword" />
+                    <input id="reloadHiddenPostsButton" type="button" style="padding: 5px;" value="Загрузить скрытопосты" />
+                    <a target="_blank" style="font-size: small; margin-left: 5px" href="https://github.com/anon25519/hiddenthread">?</a>
+                </div>
+                <div style="padding:5px;text-align:center;">
+                    <!--<span id="loadingStatus" style="display: none">Загрузка...</span>-->
+                    Загружено картинок: <span id="imagesLoadedCount">0</span>/<span id="imagesCount">0</span>
+                    <br>
+                    Загружено скрытопостов: <span id="hiddenPostsLoadedCount">0</span>
+                </div>
+                <textarea
+                    id="hiddenPostInput"
+                    placeholder="Пиши скрытый текст тут"
+                    style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
+                    rows="10"
+                ></textarea>
+                <div id="hiddenFilesDiv" style="padding: 5px;">
+                    <span>Выбери скрытые файлы: </span>
+                    <input id="hiddenFilesInput" type="file" multiple="true" />
+                    <br>
+                    <span>Выбери картинку-контейнер: </span>
+                    <input id="hiddenContainerInput" type="file" />
+                    <span style="margin-right: 5px">Имя картинки:</span>
+                    <input id="fileName">
+                    <br>
+                    <input id="hiddenFilesClearButton" class="mt-1" type="button" value="Очистить список файлов" />
+                </div>
+                <div style="padding: 5px;">
+                    <div style="font-size:large;text-align:center;">Подписать пост</div>
+                    Приватный ключ (ECDSA p256, base58): <br>
+                    <input
+                        id="privateKey"
+                        style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
+                    />
+                    <br>
+                    Публичный ключ:
+                    <br>
+                    <input
+                        id="publicKey"
+                        readonly
+                        style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
+                    />
+                    <br>
+                    <div align="center" class="mt-1">
+                        <input id="generateKeyPairButton" type="button" style="padding: 5px;" value="Сгенерировать ключи" />
+                    </div>
+                </div>
+                <div style="padding: 5px;">
+                    <div style="font-size:large;text-align:center;">Приватный пост</div>
+                    Публичный ключ получателя: <br>
+                    <input id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">
+                </div>
+                <br>
+                <div align="center">
+                    <input id="createHiddenPostButton" type="button" value="Создать картинку со скрытопостом" style="padding: 5px;">
+                </div>
+                <div id="imageContainerDiv" />
+            </div>
+            <div style="display: flex; justify-content: center;">
+                <span id="versionInfo"></span>
+            </div>
+            <hr>
+        </div>
+    `
+    let style = document.createElement("style")
+    let css = `
+        #hiddenPostDiv .mt-1 { margin-top: 1em; }
+        #hiddenPostDiv input, textarea {
+            border: 1px solid var(--theme_default_btnborder);
+            background: var(--theme_default_altbtnbg);
+            color: var(--theme_default_btntext);
+        }
+        #hiddenPostDiv input[type=button] {
+            color: var(--theme_default_btntext);
+        }
+    `
+    if (style.styleSheet) {
+        // This is required for IE8 and below.
+        style.styleSheet.cssText = css;
+    } else {
+        style.appendChild(document.createTextNode(css));
+    }
+    document.head.appendChild(style)
+
+    // render
+    document.getElementById('postform').insertAdjacentHTML("beforeend", formTemplate);
+
+    // listeners
+
+    let toggleEl = document.getElementById("hiddenThreadToggle")
+    toggleEl.onclick = () => {
+        setStorage({ hide: !storage.hide })
+        toggleEl.textContent = toggleText()
+        let formEl = document.getElementById("hiddenThreadForm")
+        formEl.style.display = storage.hide
+            ? "none"
+            : ""
+    }
+
+    document.getElementById('reloadHiddenPostsButton').onclick = reloadHiddenPosts;
+
     document.getElementById('hiddenFilesClearButton').onclick = function () {
         document.getElementById('hiddenFilesInput').value = null;
     }
@@ -1101,21 +1145,26 @@ function createInterface() {
     }
 }
 
-var watchedPosts = new Set()
+var watchedPosts = new Set();
+var postsWithLoadedImages = new Set();
+let scanning = false;
 /*
 Просмотреть все посты и попробовать расшифровать
 */
 function loadHiddenThread() {
+    if (scanning) {
+        return; // Что не запускалось в нескольких потоках
+    }
+    scanning = true;
+
     let threadId = window.thread.id;
     let thread = window.Post(threadId);
     let postIdList = thread.threadPosts();
 
-    for (let i = 0; i < postIdList.length; i++) {
-        const post_id = postIdList[i];
-        if (window.gLoadedHiddenPosts.has(post_id) || watchedPosts.has(post_id)) {
-            continue;
-        }
+    // Получить посты, которые нужно просмотреть
+    let postsToScan = [];
 
+    for (let i = 0; i < postIdList.length; i++) {
         let postAjax = thread.getPostsObj()[String(postIdList[i])].ajax;
         if (!postAjax) continue;
 
@@ -1124,21 +1173,35 @@ function loadHiddenThread() {
             continue;
         }
 
-        let url = postFiles[0].path;
-        let postId = postIdList[i];
-        loadPost(postId, url);
-        watchedPosts.add(post_id);
+
+        postsToScan.push({
+            url: postFiles[0].path,
+            postId: postIdList[i]
+        });
     }
+
+    document.getElementById("imagesCount").textContent = postsToScan.length.toString();
+
+    for (let i = 0; i < postsToScan.length; i++) {
+        const url = postsToScan[i].url;
+        const post_id = postsToScan[i].postId;
+
+        if (window.gLoadedHiddenPosts.has(post_id) || watchedPosts.has(post_id)) {
+            continue;
+        }
+
+        watchedPosts.add(post_id);
+        loadPost(post_id, url);
+    }
+    scanning = false;
 }
 
 createInterface();
 
 /* Отслеживание новых постов */
 
-if (window.gLoadedHiddenPosts == undefined) {
-    // Список id всех просмотренных постов
-    window.gLoadedHiddenPosts = new Set();
-}
+// Список id всех просмотренных постов
+window.gLoadedHiddenPosts = new Set();
 
 // Выбираем элемент
 var target = document.querySelector('#posts-form');
