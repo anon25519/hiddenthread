@@ -1103,7 +1103,9 @@ function createInterface()
                     <span>Выбери скрытые файлы: </span>
                     <input id="hiddenFilesInput" type="file" multiple="true" />
                     <br>
+                    <br>
                     <span>Выбери картинку-контейнер: </span>
+
 
                     <input id="hiddenContainerInput" type="file" />
                     <br>
