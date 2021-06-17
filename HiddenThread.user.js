@@ -600,16 +600,21 @@ function createFileLinksDiv(files) {
 
     fileLinksDiv.innerHTML += 'Файлы: ';
     for (let i = 0; i < files.length; i++) {
-        let link = document.createElement('a');
-        link.target = "_blank";
-        link.innerText = files[i].name;
-        link.href = URL.createObjectURL(files[i].data);
-        fileLinksDiv.appendChild(link);
-        fileLinksDiv.innerHTML += ' ';
+        let mime = files[i].data.type;
+        // Если тип известен, создаем ссылку для открытия файла
+        // в новой вкладке, иначе только ссылку для скачивания
+        if (mime) {
+            let link = document.createElement('a');
+            link.target = "_blank";
+            link.innerText = files[i].name;
+            link.href = URL.createObjectURL(files[i].data);
+            fileLinksDiv.appendChild(link);
+            fileLinksDiv.innerHTML += ' ';
+        }
 
         let downloadLink = document.createElement('a');
         downloadLink.download = files[i].name;
-        downloadLink.innerText = '\u2193';
+        downloadLink.innerText = (mime ? '' : files[i].name) + ' \u2193';
         downloadLink.href = URL.createObjectURL(files[i].data);
         fileLinksDiv.appendChild(downloadLink);
 
@@ -767,7 +772,22 @@ async function unzipPostData(zipData) {
             }
             else {
                 let fileData = await archive.file(filename).async('blob');
-                files.push({ 'name': filename, 'data': fileData });
+                const extMimeDict = {
+                    'jpg': 'image/jpeg',
+                    'jpeg': 'image/jpeg',
+                    'png': 'image/png',
+                    'gif': 'image/gif',
+                    'txt': 'text/plain; charset=utf-8',
+                    'webm': 'video/webm',
+                    'mp4': 'video/mp4',
+                    'mp3': 'audio/mpeg',
+                    'pdf': 'application/pdf',
+                };
+                let ext = filename.split('.').pop();
+                if (extMimeDict[ext]) {
+                    fileData = fileData.slice(0, fileData.size, extMimeDict[ext]);
+                }
+                files.push({'name': filename, 'data': fileData});
             }
         }
     }
