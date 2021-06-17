@@ -36,7 +36,7 @@ const injectLib = (url) => {
 
 injectLib("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js")
 injectLib("https://cdn.jsdelivr.net/npm/mersennetwister@0.2.3/src/MersenneTwister.min.js")
-
+injectLib("https://raw.githubusercontent.com/indutny/elliptic/43ac7f230069bd1575e1e4a58394a512303ba803/dist/elliptic.min.js")
 const STORAGE_KEY = "hiddenThread"
 
 let getStorage = () => {
