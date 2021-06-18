@@ -118,7 +118,7 @@ function shuffleArray(array, steps) {
 }
 
 function getShuffledIndexList(length, steps) {
-    let arrayIndexList = new Array(length / 4 * 3);
+    let arrayIndexList = new Uint32Array(length / 4 * 3);
     for (let i = 0, j = 0; i < length; i++) {
         // Skip alpha channel
         if ((i + 1) % 4 != 0) {
