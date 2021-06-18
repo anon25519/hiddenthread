@@ -23,21 +23,17 @@ const CURRENT_VERSION = "0.2";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 
 const injectLib = (url) => {
-    let lib = document.createElement("script")
-    lib.type = "text/javascript"
-    lib.src = url
-    document.head.appendChild(lib)
+    let lib = document.createElement("script");
+    lib.type = "text/javascript";
+    lib.src = url;
+    document.head.appendChild(lib);
 }
 
-injectLib("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js")
-injectLib("https://cdn.jsdelivr.net/npm/mersennetwister@0.2.3/src/MersenneTwister.min.js")
-injectLib("https://cdn.rawgit.com/indutny/elliptic/43ac7f230069bd1575e1e4a58394a512303ba803/dist/elliptic.min.js")
-
-const STORAGE_KEY = "hiddenThread"
+const STORAGE_KEY = "hiddenThread";
 
 let getStorage = () => {
-    let storage = localStorage.getItem(STORAGE_KEY) || "{}"
-    return JSON.parse(storage)
+    let storage = localStorage.getItem(STORAGE_KEY) || "{}";
+    return JSON.parse(storage);
 }
 let storage = getStorage()
 let setStorage = (value) => {
@@ -45,8 +41,8 @@ let setStorage = (value) => {
         ...getStorage(),
         ...value
     }
-    storage = newStorage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newStorage))
+    storage = newStorage;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newStorage));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1282,6 +1278,10 @@ if (!target) {
     // Не в треде
     return;
 }
+
+injectLib("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js");
+injectLib("https://cdn.jsdelivr.net/npm/mersennetwister@0.2.3/src/MersenneTwister.min.js");
+injectLib("https://cdn.rawgit.com/indutny/elliptic/43ac7f230069bd1575e1e4a58394a512303ba803/dist/elliptic.min.js");
 
 CheckVersion();
 
