@@ -444,6 +444,11 @@ async function hideDataToImage(file, data) {
     let ctx = canvas.getContext('2d');
     ctx.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
     let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // Убираем прозрачность
+    for (let i = 3; i < imageData.data.length; i+=4) {
+        if (imageData.data[i] != 255) imageData.data[i] = 255;
+    }
     hideDataToArray(imageData.data, data);
     ctx.putImageData(imageData, 0, 0);
 
