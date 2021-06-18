@@ -1271,9 +1271,18 @@ window.gLoadedHiddenPosts = new Set();
 // Выбираем элемент
 var target = document.querySelector('#posts-form');
 
-target.addEventListener("DOMNodeInserted", function (event) {
-    // works like while-true loop
-    loadHiddenThread();
-}, false);
+if (!target) {
+    // Установлена кукла
+    let threadId = document.URL.toString().split('.')[1].split('/')[3];
+    target = document.querySelector(`#thread-${threadId}`);
+    console.log(target);
+}
+
+if (!target) {
+    // Не в треде
+    return;
+}
 
 CheckVersion();
+
+setTimeout(loadHiddenThread, 5000);
