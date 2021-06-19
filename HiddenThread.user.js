@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.2
+// @version      0.3
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -19,25 +19,21 @@ const SIGNED_POST_TYPE = 1;
 const MESSAGE_MAX_LENGTH = 30000
 const MAX_FILES_COUNT = 100;
 
-const CURRENT_VERSION = "0.2";
+const CURRENT_VERSION = "0.3";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 
 const injectLib = (url) => {
-    let lib = document.createElement("script")
-    lib.type = "text/javascript"
-    lib.src = url
-    document.head.appendChild(lib)
+    let lib = document.createElement("script");
+    lib.type = "text/javascript";
+    lib.src = url;
+    document.head.appendChild(lib);
 }
 
-injectLib("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js")
-injectLib("https://cdn.jsdelivr.net/npm/mersennetwister@0.2.3/src/MersenneTwister.min.js")
-injectLib("https://cdn.rawgit.com/indutny/elliptic/43ac7f230069bd1575e1e4a58394a512303ba803/dist/elliptic.min.js")
-
-const STORAGE_KEY = "hiddenThread"
+const STORAGE_KEY = "hiddenThread";
 
 let getStorage = () => {
-    let storage = localStorage.getItem(STORAGE_KEY) || "{}"
-    return JSON.parse(storage)
+    let storage = localStorage.getItem(STORAGE_KEY) || "{}";
+    return JSON.parse(storage);
 }
 let storage = getStorage()
 let setStorage = (value) => {
@@ -45,8 +41,8 @@ let setStorage = (value) => {
         ...getStorage(),
         ...value
     }
-    storage = newStorage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newStorage))
+    storage = newStorage;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newStorage));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -591,7 +587,7 @@ function createHiddenPost() {
         document.getElementById('otherPublicKey').value)
         .then(function (imageResult) {
             let img = document.createElement('img');
-            img.style = "max-width: 100%; max-height: 100%;";
+            img.style = "max-width: 300px;";
             img.src = imageResult.canvas.toDataURL("image/png");
 
             imageContainerDiv.appendChild(createElementFromHTML('<span>Сохрани изображение ниже и вставь в форму отправки, если оно не вставилось автоматически:</span>'));
@@ -600,7 +596,35 @@ function createHiddenPost() {
 
             imageResult.canvas.toBlob(function (blob) {
                 blob.name = getFileName();
-                window.FormFiles.addMultiFiles([blob]);
+                if (isDollchan()) {
+                    let containers = document.getElementsByClassName('de-hiddencontainer-thumb');
+                    let containerId = containers.length == 0 ? 0 : parseInt(containers[0].id.split('-').pop()) + 1;
+                    let inputFileThumbTemplate =
+                        `<div id="de-hiddencontainer-thumb-${containerId}" class="de-hiddencontainer-thumb" style="display: inline-block;">`+
+                        `  <div class="de-file">`+
+                        `    <div class="de-file-img">`+
+                        `      <div class="de-file-img" title="${blob.name}">`+
+                        `        <img class="de-file-img" src="${URL.createObjectURL(blob)}">`+
+                        `      </div>`+
+                        `    </div>`+
+                        `  </div>`+
+                        `<input type="button" onclick="`+
+                        `document.getElementById('de-hiddencontainer-input-${containerId}').value = null;`+
+                        `document.getElementById('de-hiddencontainer-input-${containerId}').remove();`+
+                        `document.getElementById('de-hiddencontainer-thumb-${containerId}').remove();" value="X"/>`+
+                        `</div>`;
+                    let inputFileTemplate = `<div style="display: none;"><input id="de-hiddencontainer-input-${containerId}" type="file" name="formimages[]" class="de-file-input" multiple="true" style="display: none;"></div>'`;
+                    document.getElementsByClassName('postform__raw filer')[0].insertAdjacentHTML("afterbegin", inputFileTemplate);
+                    let file = new File([blob], blob.name, {type: blob.type});
+                    let container = new DataTransfer();
+                    container.items.add(file);
+                    document.getElementById(`de-hiddencontainer-input-${containerId}`).files = container.files;
+
+                    document.getElementById('de-file-area').insertAdjacentHTML("afterbegin", inputFileThumbTemplate);
+                }
+                else {
+                    window.FormFiles.addMultiFiles([blob]);
+                }
             });
 
             alert('Спрятано ' + imageResult.len + ' байт (занято ' + imageResult.percent + '% изображения)');
@@ -644,14 +668,114 @@ function createFileLinksDiv(files) {
     return fileLinksDiv;
 }
 
+const tags = [
+    {
+        open: '[i]',
+        close: '[/i]',
+        open_: "<em>",
+        close_: "</em>"
+    },
+    {
+        open: '[b]',
+        close: '[/b]',
+        open_: "<strong>",
+        close_: "</strong>"
+    },
+    {
+        open: '[spoiler]',
+        close: '[/spoiler]',
+        open_: `<span class=\"spoiler\">`,
+        close_: "</span>"
+    },
+    {
+        open: '[u]',
+        close: '[/u]',
+        open_: `<span class=\"u\">`,
+        close_: "</span>"
+    },
+    {
+        open: '[o]',
+        close: '[/o]',
+        open_: `<span class=\"o\">`,
+        close_: "</span>"
+    },
+    {
+        open: '[s]',
+        close: '[/s]',
+        open_: `<span class=\"s\">`,
+        close_: "</span>"
+    },
+    {
+        open: '[sup]',
+        close: '[/sup]',
+        open_: `<sup>`,
+        close_: "</sup>"
+    },
+    {
+        open: '[sub]',
+        close: '[/sub]',
+        open_: `<sub>`,
+        close_: "</sub>"
+    }
+];
+
+function convertToHtml(text) {
+    let oldStr;
+    do {
+        oldStr = text;
+        text = text.replace('\n', '<br>');
+    } while (oldStr != text);
+    for (let i = 0; i < text.length; i++) {
+        for (let j = 0; j < tags.length; j++) {
+            const t = tags[j];
+            if (text.substring(i, i + t.open.length) === t.open) {
+                let c = getClosingTagIndex(text, i, t);
+                if (c == -1) {
+                    continue;
+                }
+                text = replaceAt(text, i, t.open.length, t.open_);
+                text = replaceAt(text, c + (t.open_.length - t.open.length), t.close.length, t.close_);
+            }
+        }
+
+    }
+    return text;
+}
+
+function replaceAt(text, index, length, replacement) {
+    return text.substr(0, index) + replacement + text.substr(index + length);
+}
+
+function getClosingTagIndex(text, i, tag) {
+    i += tag.open.length;
+    let skip = 0;
+    for (; i < text.length; i++) {
+        if (text.substring(i, i + tag.open.length) === tag.open) {
+            skip += 1;
+            continue;
+        }
+
+        if (text.substring(i, i + tag.close.length) === tag.close) {
+            skip -= 1;
+            if (skip == -1) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
 // Добавление HTML скрытопоста к основному посту
 function addHiddenPostToHtml(postId, postResult) {
     console.log(`HiddenThread: Post ${postId} is hidden, its object:`);
     console.log(postResult);
+
+    let clearPost = document.getElementById('post-' + postId);
     let postBodyDiv = document.createElement('div');
     postBodyDiv.id = 'hidden_post-body-' + postId;
     postBodyDiv.classList.add("post");
     postBodyDiv.classList.add("post_type_reply");
+    postBodyDiv.classList.add("post_type_hiddenthread");
     postBodyDiv.setAttribute('data-num', String(postId));
 
     let postMetadata = document.createElement('div');
@@ -661,13 +785,18 @@ function addHiddenPostToHtml(postId, postResult) {
     postArticle.classList.add("post__message");
 
     let postArticleMessage = document.createElement('div');
-    postArticleMessage.innerText = postResult.post.message;
+    postArticleMessage.innerHTML = convertToHtml(postResult.post.message);
 
     if (postResult.isPrivate) {
         postMetadata.appendChild(createElementFromHTML('<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом</i></div>'));
     }
     let timeString = (new Date(postResult.header.timestamp * 1000))
         .toISOString().replace('T', ' ').replace(/\.\d+Z/g, '');
+    let d = clearPost.getElementsByClassName('post__time')[0].textContent.split(' ');
+    let postDateMs = Date.parse(`20${d[0].split('/')[2]}-${d[0].split('/')[1]}-${d[0].split('/')[0]}T${d[2]}Z`);
+    if (Math.abs(postDateMs/1000 - postResult.header.timestamp) > 24*3600) {
+        timeString += ' <span style="color:red;">(неверное время поста!)</span>';
+    }
     postMetadata.appendChild(createElementFromHTML('<div>Дата создания скрытопоста (UTC): ' + timeString + '</div>'));
     postMetadata.appendChild(createFileLinksDiv(postResult.post.files));
 
@@ -681,18 +810,14 @@ function addHiddenPostToHtml(postId, postResult) {
         postMetadata.appendChild(postArticleSign);
     }
     postArticle.appendChild(postMetadata);
+    if (postResult.post.unpackResult) {
+        postArticle.appendChild(createElementFromHTML(`<div style="color:red;">${postResult.post.unpackResult}</div>`));
+    }
     postArticle.appendChild(document.createElement('br'));
     postArticle.appendChild(postArticleMessage);
 
-    let postRefsDiv = document.createElement('div');
-    postRefsDiv.id = 'hidden_refmap-' + postId;
-    postRefsDiv.classList.add("post__refmap");
-    postRefsDiv.style = 'display: block;';
-
     postBodyDiv.appendChild(postArticle);
-    postBodyDiv.appendChild(postRefsDiv);
 
-    let clearPost = document.getElementById('post-' + postId);
     clearPost.appendChild(document.createElement('br'));
     clearPost.appendChild(postBodyDiv);
 }
@@ -711,11 +836,28 @@ function createElementFromHTML(htmlString) {
     return div.firstElementChild;
 }
 
+// Ссылка на пост в тексте
 function createReplyLink(postId) {
-    let threadId = window.thread.id;
-    return '<a href="/' + window.board + '/res/' + threadId + '.html#' + postId +
-        '" class="post-reply-link" data-thread="' + threadId + '" data-num="' + postId +
-        '">&gt;&gt;' + postId + '</a>';
+    if (isDollchan()) {
+        return `<a href="/${window.board}/res/${window.thread.id}.html#${postId}` +
+            `" class="de-link-postref post-reply-link" data-thread="${window.thread.id}" data-num="${postId}` +
+            `">&gt;&gt;${postId}</a>`;
+    }
+    else {
+        return `<a href="/${window.board}/res/${window.thread.id}.html#${postId}` +
+            `" class="de-link-postref post-reply-link" data-thread="${window.thread.id}" data-num="${postId}` +
+            `">&gt;&gt;${postId}</a>`;
+    }
+}
+
+// Ссылка на пост в ответах
+function createPostRefLink(postId) {
+    if (isDollchan()) {
+        return `<a href="#${postId}" class="de-link-backref">&gt;&gt;${postId}</a><span class="de-refcomma">, </span>`;
+    }
+    else {
+        return createReplyLink(postId);
+    }
 }
 
 function addReplyLinks(postId, text) {
@@ -737,16 +879,27 @@ function addReplyLinks(postId, text) {
             postArticle.innerHTML.substr(match.index + indexDiff + oldLength);
         indexDiff += replyStr.length - oldLength;
 
+        if (isDollchan())
+        {
+            let deRefmap = document.getElementById('post-' + refPostId).getElementsByClassName('de-refmap')[0];
+            if (!deRefmap)
+            {
+                let deRefmapTemplate = `<div class="de-refmap"></div>`;
+                document.getElementById('m' + refPostId).insertAdjacentHTML('afterend', deRefmapTemplate);
+            }
+        }
+
         if (!refPostIdSet.has(refPostId)) {
             refPostIdSet.add(refPostId);
             // Добавление ссылки на текущий пост в ответы другого поста
             // В HTML:
             let refPostRefs =
-                document.getElementById('hidden_refmap-' + refPostId) ||
+                (document.getElementById('post-' + refPostId) &&
+                 document.getElementById('post-' + refPostId).getElementsByClassName('de-refmap')[0]) ||
                 document.getElementById('refmap-' + refPostId);
             if (refPostRefs != null) {
                 refPostRefs.style = "display: block;";
-                refPostRefs.appendChild(createElementFromHTML(createReplyLink(postId)));
+                refPostRefs.appendChild(createElementFromHTML(createPostRefLink(postId)));
 
                 // В Object (для всплывающих постов):
                 let refPost = thread.getPostsObj()[refPostId];
@@ -764,12 +917,14 @@ function addReplyLinks(postId, text) {
 function renderHiddenPost(postId, postResult) {
     addHiddenPostToHtml(postId, postResult);
     addReplyLinks(postId, postResult.post.message);
+    // TODO: отображение скрытопостов во всплывающих постах с куклоскриптом
     addHiddenPostToObj(postId); // Текст скрытопоста берется из HTML
 }
 
 async function unzipPostData(zipData) {
     let zip = new JSZip();
 
+    let unpackResult = null;
     let postMessage = '';
     let files = [];
     let filesCount = 0;
@@ -811,10 +966,11 @@ async function unzipPostData(zipData) {
         }
     }
     catch (e) {
-        console.log('HiddenThread: Ошибка при распаковке архива: ' + e + ' stack:\n' + e.stack);
+        console.log('HiddenThread: Ошибка при распаковке архива: ' + e);
+        unpackResult = 'Не удалось распаковать весь пост, контейнер поврежден';
     }
 
-    return { 'message': postMessage, 'files': files };
+    return { 'message': postMessage, 'files': files, 'unpackResult': unpackResult };
 }
 
 async function verifyPostData(data) {
@@ -980,7 +1136,10 @@ async function loadPostFromImage(img, password, privateKey) {
 
 /* Перепроверить все посты */
 function reloadHiddenPosts() {
-    watchedPosts = new Set();
+    // очистить список скаченных и просмотренных изображений
+    // чтобы они снова скачались и просканировались
+    loadedImages = new Set();
+    watchedImages = new Set();
     loadHiddenThread();
 }
 
@@ -993,16 +1152,16 @@ function loadPost(postId, file_url) {
     img.onload = (function () {
         console.log('HiddenThread: loading post ' + postId + ' ' + file_url);
 
-        postsWithLoadedImages.add(postId);
-        document.getElementById("imagesLoadedCount").textContent = postsWithLoadedImages.size;
+        loadedImages.add(file_url);
+        document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
 
         loadPostFromImage(img,
             document.getElementById('hiddenThreadPassword').value,
             document.getElementById('privateKey').value)
             .then(function (postResult) {
                 if (postResult == null) return;
-                window.gLoadedHiddenPosts.add(postId);
-                document.getElementById("hiddenPostsLoadedCount").textContent = window.gLoadedHiddenPosts.size;
+                loadedPosts.add(file_url);
+                document.getElementById("hiddenPostsLoadedCount").textContent = loadedPosts.size;
                 renderHiddenPost(postId, postResult);
             });
     });
@@ -1044,16 +1203,17 @@ function createInterface() {
             : "Закрыть"
     }
     let formTemplate = `
-        <div id="hiddenPostDiv">
+        <br>
+        <div id="hiddenPostDiv" style="display: inline-block; text-align: left; width: 100%;">
             <hr>
             <div style="position: relative; display: flex; justify-content: center; align-items: center">
-                <p style="font-size:x-large;">Скрытотред v0.2</p>
+                <p style="font-size:x-large;">Скрытотред ${CURRENT_VERSION}</p>
                 <span id="hiddenThreadToggle" style="position: absolute; right: 0; cursor: pointer">${toggleText()}</span>
             </div>
             <div id="hiddenThreadForm" style="display: ${storage.hide ? 'none' : ''}">
                 <div style="padding:5px;">
                     <span style="padding-right: 5px;">Пароль:</span>
-                    <input id="hiddenThreadPassword" />
+                    <input placeholder="Без пароля" id="hiddenThreadPassword" />
                     <input id="reloadHiddenPostsButton" type="button" style="padding: 5px;" value="Загрузить скрытопосты" />
                     <a target="_blank" style="font-size: small; margin-left: 5px" href="https://github.com/anon25519/hiddenthread">?</a>
                 </div>
@@ -1065,7 +1225,7 @@ function createInterface() {
                 </div>
                 <textarea
                     id="hiddenPostInput"
-                    placeholder="Пиши скрытый текст тут"
+                    placeholder="Пиши скрытый текст тут. Максимальная длина ${MESSAGE_MAX_LENGTH}"
                     style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
                     rows="10"
                 ></textarea>
@@ -1077,7 +1237,7 @@ function createInterface() {
                     <input id="hiddenContainerInput" type="file" multiple="true" />
                     <br>
                     <span style="margin-right: 5px">Имя картинки:</span>
-                    <input id="fileName">
+                    <input placeholder="image.png" id="fileName">
                     <br>
                     <input id="hiddenFilesClearButton" class="mt-1" type="button" value="Очистить список файлов" />
                 </div>
@@ -1086,6 +1246,7 @@ function createInterface() {
                     Приватный ключ (ECDSA p256, base58): <br>
                     <input
                         id="privateKey"
+                        placeholder="Без ключа"
                         style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
                     />
                     <br>
@@ -1094,7 +1255,7 @@ function createInterface() {
                     <input
                         id="publicKey"
                         readonly
-                        style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
+                        style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px; color: grey;"
                     />
                     <br>
                     <div align="center" class="mt-1">
@@ -1104,13 +1265,13 @@ function createInterface() {
                 <div style="padding: 5px;">
                     <div style="font-size:large;text-align:center;">Приватный пост</div>
                     Публичный ключ получателя: <br>
-                    <input id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">
+                    <input placeholder="Без получателя" id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">
                 </div>
                 <br>
                 <div align="center">
                     <input id="createHiddenPostButton" type="button" value="Создать картинку со скрытопостом" style="padding: 5px;">
                 </div>
-                <div id="imageContainerDiv" />
+                <div id="imageContainerDiv" align="center" />
             </div>
             <div style="display: flex; justify-content: center;">
                 <span id="versionInfo"></span>
@@ -1129,6 +1290,7 @@ function createInterface() {
         #hiddenPostDiv input[type=button] {
             color: var(--theme_default_btntext);
         }
+        .post_type_hiddenthread { border-left: 3px solid #F00000; border-right: 3px solid #F00000; }
     `
     if (style.styleSheet) {
         // This is required for IE8 and below.
@@ -1139,7 +1301,7 @@ function createInterface() {
     document.head.appendChild(style)
 
     // render
-    document.getElementById('postform').insertAdjacentHTML("beforeend", formTemplate);
+    document.getElementById('postform').insertAdjacentHTML(isDollchan() ? 'afterend' : 'beforeend', formTemplate);
 
     // listeners
 
@@ -1186,8 +1348,17 @@ function createInterface() {
 }
 
 // Получить посты, которые нужно просмотреть
+/*
+Возвращает объект:
+postsToScan{
+    urls: [url1, url2],
+    postId: ...
+}
+*/
 function getPostsToScan()
 {
+    if (isDollchan()) return getPostsToScanFromHtml();
+
     let threadId = window.thread.id;
     let thread = window.Post(threadId);
     let postsToScan = [];
@@ -1198,82 +1369,124 @@ function getPostsToScan()
     }
     catch (e) {
         // Если не удалось получить объект треда, берем id и ссылки из HTML
-        var images = document.getElementsByClassName('post__images');
-        for (let img of images) {
-            let url = img.getElementsByClassName('post__image-link')[0].href
-            if (url.endsWith('.png'))
-            {
-                postsToScan.push({
-                    url: url,
-                    postId: img.parentNode.getAttribute('data-num')
-                });
-            }
-        }
-
-        return postsToScan;
+        return getPostsToScanFromHtml();
     }
 
-    for (let i = 0; i < postIdList.length; i++) {
-        let postAjax = thread.getPostsObj()[String(postIdList[i])].ajax;
+    for (let postId of postIdList) {
+        let postAjax = thread.getPostsObj()[String(postId)].ajax;
         if (!postAjax) continue;
 
         let postFiles = postAjax.files;
-        if (!(postFiles.length > 0 && postFiles[0].path.endsWith('.png'))) {
+        if (postFiles.length == 0) {
             continue;
         }
 
+        let urls = [];
+        for (let file of postFiles) {
+            if (file.path.endsWith('.png')) {
+                urls.push(file.path);
+            }
+        }
         postsToScan.push({
-            url: postFiles[0].path,
-            postId: postIdList[i]
+            urls: urls,
+            postId: postId
         });
     }
 
     return postsToScan;
 }
 
-var watchedPosts = new Set();
-var postsWithLoadedImages = new Set();
+function getPostsToScanFromHtml() {
+    let postsToScan = [];
+    let post_images = document.getElementsByClassName('post__images');
+    for (let img of post_images) {
+        let urls_html = img.getElementsByClassName('post__image-link');
+        let urls = [];
+        for (let url of urls_html) {
+            if (url.href.endsWith('.png')) {
+                urls.push(url.href);
+            }
+        }
+
+        postsToScan.push({
+            urls: urls,
+            postId: img.parentNode.getAttribute('data-num')
+        });
+    }
+
+    return postsToScan;
+}
+
+
+// множество просмотренных url картинок
+var watchedImages = new Set();
+// множество url с скаченными картинками
+var loadedImages = new Set();
+// множество url с загруженными скрытопостами
+var loadedPosts = new Set();
 let scanning = false;
 /*
 Просмотреть все посты и попробовать расшифровать
 */
 function loadHiddenThread() {
     if (scanning) {
-        return; // Что не запускалось в нескольких потоках
+        return; // Чтобы не запускалось в нескольких потоках
     }
     scanning = true;
 
     let postsToScan = getPostsToScan();
 
-    document.getElementById("imagesCount").textContent = postsToScan.length.toString();
+    document.getElementById("imagesCount").textContent = getImagesCount(postsToScan).toString();
 
-    for (let i = 0; i < postsToScan.length; i++) {
-        const url = postsToScan[i].url;
-        const post_id = postsToScan[i].postId;
+    for (let post of postsToScan) {
+        for (let url of post.urls) {
+            if (loadedImages.has(url) || loadedPosts.has(url) || watchedImages.has(url)) {
+                continue;
+            }
+            watchedImages.add(url);
 
-        if (window.gLoadedHiddenPosts.has(post_id) || watchedPosts.has(post_id)) {
-            continue;
+            loadPost(post.postId, url);
         }
-
-        watchedPosts.add(post_id);
-        loadPost(post_id, url);
     }
+    document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
     scanning = false;
+}
+
+function getImagesCount(postsToScan) {
+    let r = 0;
+    for (let i = 0; i < postsToScan.length; i++) {
+        r += postsToScan[i].urls.length;
+    }
+    return r;
 }
 
 createInterface();
 
 /* Отслеживание новых постов */
 
-// Список id всех просмотренных постов
-window.gLoadedHiddenPosts = new Set();
-
 // Выбираем элемент
 var target = document.querySelector('#posts-form');
+function isDollchan()
+{
+    return document.getElementsByClassName('de-runned').length;
+}
 
-target.addEventListener("DOMNodeInserted", function (event) {
-    // works like while-true loop
-    loadHiddenThread();
-}, false);
+if (!target) {
+    // Установлена кукла
+    let threadId = document.URL.toString().split('.')[1].split('/')[3];
+    target = document.querySelector(`#thread-${threadId}`);
+    console.log(target);
+}
+
+if (!target) {
+    // Не в треде
+    return;
+}
+
+injectLib("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js");
+injectLib("https://cdn.jsdelivr.net/npm/mersennetwister@0.2.3/src/MersenneTwister.min.js");
+injectLib("https://cdn.rawgit.com/indutny/elliptic/43ac7f230069bd1575e1e4a58394a512303ba803/dist/elliptic.min.js");
 
 CheckVersion();
+
+setInterval(loadHiddenThread, 5000);
