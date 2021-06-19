@@ -976,7 +976,7 @@ async function loadPostFromImage(img, password, privateKey) {
 
 /* Перепроверить все посты */
 function reloadHiddenPosts() {
-    watchedPosts = new Set();
+    watchedImages = new Set();
     loadHiddenThread();
 }
 
@@ -989,16 +989,16 @@ function loadPost(postId, file_url) {
     img.onload = (function () {
         console.log('HiddenThread: loading post ' + postId + ' ' + file_url);
 
-        postsWithLoadedImages.add(postId);
-        document.getElementById("imagesLoadedCount").textContent = postsWithLoadedImages.size;
+        loadedImages.add(file_url);
+        document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
 
         loadPostFromImage(img,
             document.getElementById('hiddenThreadPassword').value,
             document.getElementById('privateKey').value)
             .then(function (postResult) {
                 if (postResult == null) return;
-                window.gLoadedHiddenPosts.add(postId);
-                document.getElementById("hiddenPostsLoadedCount").textContent = window.gLoadedHiddenPosts.size;
+                loadedImages.add(file_url);
+                document.getElementById("hiddenPostsLoadedCount").textContent = loadedImages.size;
                 renderHiddenPost(postId, postResult);
             });
     });
@@ -1182,6 +1182,13 @@ function createInterface() {
 }
 
 // Получить посты, которые нужно просмотреть
+/*
+Возвращает объект:
+postsToScan{
+    urls: [url1, url2],
+    postId: ...
+}
+*/
 function getPostsToScan()
 {
     let threadId = window.thread.id;
@@ -1194,19 +1201,7 @@ function getPostsToScan()
     }
     catch (e) {
         // Если не удалось получить объект треда, берем id и ссылки из HTML
-        var images = document.getElementsByClassName('post__images');
-        for (let img of images) {
-            let url = img.getElementsByClassName('post__image-link')[0].href
-            if (url.endsWith('.png'))
-            {
-                postsToScan.push({
-                    url: url,
-                    postId: img.parentNode.getAttribute('data-num')
-                });
-            }
-        }
-
-        return postsToScan;
+        return getPostsToScanFromHtml();
     }
 
     for (let i = 0; i < postIdList.length; i++) {
@@ -1214,12 +1209,18 @@ function getPostsToScan()
         if (!postAjax) continue;
 
         let postFiles = postAjax.files;
-        if (!(postFiles.length > 0 && postFiles[0].path.endsWith('.png'))) {
+        if (postFiles.length == 0) {
             continue;
         }
 
+        let urls = [];
+        for (let i = 0; i < postFiles.length; i++) {
+            if (postFiles[i].path.endsWith('.png')) {
+                urls.push(postFiles[i].path);
+            }
+        }
         postsToScan.push({
-            url: postFiles[0].path,
+            urls: urls,
             postId: postIdList[i]
         });
     }
@@ -1227,42 +1228,72 @@ function getPostsToScan()
     return postsToScan;
 }
 
-var watchedPosts = new Set();
-var postsWithLoadedImages = new Set();
+function getPostsToScanFromHtml() {
+    var post_images = document.getElementsByClassName('post__images');
+    for (let img of post_images) {
+        let urls_html = img.getElementsByClassName('post__image-link');
+        let urls = [];
+        for (let i = 0; i < urls_html.length; i++) {
+            urls.push(urls_html[i].href)
+        }
+
+        if (urls.endsWith('.png'))
+        {
+            postsToScan.push({
+                urls: urls,
+                postId: img.parentNode.getAttribute('data-num')
+            });
+        }
+    }
+
+    return postsToScan;
+}
+
+// Множество просмотренных url
+var watchedImages = new Set();
+// множество url с нарисованными скрытопостами
+var loadedImages = new Set();
 let scanning = false;
 /*
 Просмотреть все посты и попробовать расшифровать
 */
 function loadHiddenThread() {
     if (scanning) {
-        return; // Что не запускалось в нескольких потоках
+        return; // Чтобы не запускалось в нескольких потоках
     }
     scanning = true;
 
     let postsToScan = getPostsToScan();
 
-    document.getElementById("imagesCount").textContent = postsToScan.length.toString();
+    document.getElementById("imagesCount").textContent = getImagesCount(postsToScan).toString();
 
     for (let i = 0; i < postsToScan.length; i++) {
-        const url = postsToScan[i].url;
         const post_id = postsToScan[i].postId;
+        for (let j = 0; j < postsToScan[i].urls.length; j++) {
+            const url = postsToScan[i].urls[j];
 
-        if (window.gLoadedHiddenPosts.has(post_id) || watchedPosts.has(post_id)) {
-            continue;
+            if (loadedImages.has(url) || watchedImages.has(url)) {
+                continue;
+            }
+
+            watchedImages.add(url);
+            loadPost(post_id, url);
         }
-
-        watchedPosts.add(post_id);
-        loadPost(post_id, url);
     }
     scanning = false;
+}
+
+function getImagesCount(postsToScan) {
+    let r = 0;
+    for (let i = 0; i < postsToScan.length; i++) {
+        r += postsToScan[i].urls.length;
+    }
+    return r;
 }
 
 createInterface();
 
 /* Отслеживание новых постов */
-
-// Список id всех просмотренных постов
-window.gLoadedHiddenPosts = new Set();
 
 // Выбираем элемент
 var target = document.querySelector('#posts-form');
