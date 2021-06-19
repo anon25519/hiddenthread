@@ -1204,7 +1204,7 @@ function createInterface() {
     }
     let formTemplate = `
         <br>
-        <div id="hiddenPostDiv" style="display: inline-block; text-align: left; width: 100%;">
+        <div id="hiddenPostDiv" style="display: inline-block; text-align: left; ${isDollchan()?'min-width: 600px;':'width: 100%;'}">
             <hr>
             <div style="position: relative; display: flex; justify-content: center; align-items: center">
                 <p style="font-size:x-large;">Скрытотред ${CURRENT_VERSION}</p>
