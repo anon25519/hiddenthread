@@ -810,6 +810,9 @@ function addHiddenPostToHtml(postId, postResult) {
         postMetadata.appendChild(postArticleSign);
     }
     postArticle.appendChild(postMetadata);
+    if (postResult.post.unpackResult) {
+        postArticle.appendChild(createElementFromHTML(`<div style="color:red;">${postResult.post.unpackResult}</div>`));
+    }
     postArticle.appendChild(document.createElement('br'));
     postArticle.appendChild(postArticleMessage);
 
@@ -888,12 +891,11 @@ function addReplyLinks(postId, text) {
 
         if (!refPostIdSet.has(refPostId)) {
             refPostIdSet.add(refPostId);
-            console.log(document.getElementById('post-' + refPostId).getElementsByClassName('de-refmap'));
-            console.log(document.getElementById('refmap-' + refPostId));
             // Добавление ссылки на текущий пост в ответы другого поста
             // В HTML:
             let refPostRefs =
-                document.getElementById('post-' + refPostId).getElementsByClassName('de-refmap')[0] ||
+                (document.getElementById('post-' + refPostId) &&
+                 document.getElementById('post-' + refPostId).getElementsByClassName('de-refmap')[0]) ||
                 document.getElementById('refmap-' + refPostId);
             if (refPostRefs != null) {
                 refPostRefs.style = "display: block;";
@@ -922,6 +924,7 @@ function renderHiddenPost(postId, postResult) {
 async function unzipPostData(zipData) {
     let zip = new JSZip();
 
+    let unpackResult = null;
     let postMessage = '';
     let files = [];
     let filesCount = 0;
@@ -963,10 +966,11 @@ async function unzipPostData(zipData) {
         }
     }
     catch (e) {
-        console.log('HiddenThread: Ошибка при распаковке архива: ' + e + ' stack:\n' + e.stack);
+        console.log('HiddenThread: Ошибка при распаковке архива: ' + e);
+        unpackResult = 'Не удалось распаковать весь пост, контейнер поврежден';
     }
 
-    return { 'message': postMessage, 'files': files };
+    return { 'message': postMessage, 'files': files, 'unpackResult': unpackResult };
 }
 
 async function verifyPostData(data) {
