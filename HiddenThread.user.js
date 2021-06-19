@@ -782,7 +782,7 @@ function addHiddenPostToHtml(postId, postResult) {
     postArticle.classList.add("post__message");
 
     let postArticleMessage = document.createElement('div');
-    postArticleMessage.innerText = postResult.post.message;
+    postArticleMessage.innerHTML = convertToHtml(postResult.post.message);
 
     if (postResult.isPrivate) {
         postMetadata.appendChild(createElementFromHTML('<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом</i></div>'));
