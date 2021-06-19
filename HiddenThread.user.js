@@ -1051,7 +1051,7 @@ function createInterface() {
             <div id="hiddenThreadForm" style="display: ${storage.hide ? 'none' : ''}">
                 <div style="padding:5px;">
                     <span style="padding-right: 5px;">Пароль:</span>
-                    <input id="hiddenThreadPassword" />
+                    <input placeholder="Без пароля" id="hiddenThreadPassword" />
                     <input id="reloadHiddenPostsButton" type="button" style="padding: 5px;" value="Загрузить скрытопосты" />
                     <a target="_blank" style="font-size: small; margin-left: 5px" href="https://github.com/anon25519/hiddenthread">?</a>
                 </div>
@@ -1063,7 +1063,7 @@ function createInterface() {
                 </div>
                 <textarea
                     id="hiddenPostInput"
-                    placeholder="Пиши скрытый текст тут"
+                    placeholder="Пиши скрытый текст тут. Максимальная длина ${MESSAGE_MAX_LENGTH}"
                     style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
                     rows="10"
                 ></textarea>
@@ -1075,7 +1075,7 @@ function createInterface() {
                     <input id="hiddenContainerInput" type="file" multiple="true" />
                     <br>
                     <span style="margin-right: 5px">Имя картинки:</span>
-                    <input id="fileName">
+                    <input placeholder="image.png" id="fileName">
                     <br>
                     <input id="hiddenFilesClearButton" class="mt-1" type="button" value="Очистить список файлов" />
                 </div>
@@ -1084,6 +1084,7 @@ function createInterface() {
                     Приватный ключ (ECDSA p256, base58): <br>
                     <input
                         id="privateKey"
+                        placeholder="Без ключа"
                         style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
                     />
                     <br>
@@ -1092,7 +1093,7 @@ function createInterface() {
                     <input
                         id="publicKey"
                         readonly
-                        style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
+                        style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px; color: grey;"
                     />
                     <br>
                     <div align="center" class="mt-1">
@@ -1102,7 +1103,7 @@ function createInterface() {
                 <div style="padding: 5px;">
                     <div style="font-size:large;text-align:center;">Приватный пост</div>
                     Публичный ключ получателя: <br>
-                    <input id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">
+                    <input placeholder="Без получателя" id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">
                 </div>
                 <br>
                 <div align="center">
