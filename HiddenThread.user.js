@@ -597,9 +597,10 @@ function createHiddenPost() {
             imageResult.canvas.toBlob(function (blob) {
                 blob.name = getFileName();
                 if (isDollchan()) {
-                    let containersCount = document.getElementsByClassName('de-hiddencontainer-thumb').length;
+                    let containers = document.getElementsByClassName('de-hiddencontainer-thumb');
+                    let containerId = containers.length == 0 ? 0 : parseInt(containers[0].id.split('-').pop()) + 1;
                     let inputFileThumbTemplate =
-                        `<div id="de-hiddencontainer-thumb-${containersCount}" class="de-hiddencontainer-thumb" style="display: inline-block;">`+
+                        `<div id="de-hiddencontainer-thumb-${containerId}" class="de-hiddencontainer-thumb" style="display: inline-block;">`+
                         `  <div class="de-file">`+
                         `    <div class="de-file-img">`+
                         `      <div class="de-file-img" title="${blob.name}">`+
@@ -608,16 +609,16 @@ function createHiddenPost() {
                         `    </div>`+
                         `  </div>`+
                         `<input type="button" onclick="`+
-                        `document.getElementById('de-hiddencontainer-input-${containersCount}').value = null;`+
-                        `document.getElementById('de-hiddencontainer-input-${containersCount}').remove();`+
-                        `document.getElementById('de-hiddencontainer-thumb-${containersCount}').remove();" value="X"/>`+
+                        `document.getElementById('de-hiddencontainer-input-${containerId}').value = null;`+
+                        `document.getElementById('de-hiddencontainer-input-${containerId}').remove();`+
+                        `document.getElementById('de-hiddencontainer-thumb-${containerId}').remove();" value="X"/>`+
                         `</div>`;
-                    let inputFileTemplate = `<div style="display: none;"><input id="de-hiddencontainer-input-${containersCount}" type="file" name="formimages[]" class="de-file-input" multiple="true" style="display: none;"></div>'`;
+                    let inputFileTemplate = `<div style="display: none;"><input id="de-hiddencontainer-input-${containerId}" type="file" name="formimages[]" class="de-file-input" multiple="true" style="display: none;"></div>'`;
                     document.getElementsByClassName('postform__raw filer')[0].insertAdjacentHTML("afterbegin", inputFileTemplate);
                     let file = new File([blob], blob.name, {type: blob.type});
                     let container = new DataTransfer();
                     container.items.add(file);
-                    document.getElementById(`de-hiddencontainer-input-${containersCount}`).files = container.files;
+                    document.getElementById(`de-hiddencontainer-input-${containerId}`).files = container.files;
 
                     document.getElementById('de-file-area').insertAdjacentHTML("afterbegin", inputFileThumbTemplate);
                 }
