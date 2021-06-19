@@ -733,8 +733,8 @@ function convertToHtml(text) {
                 if (c == -1) {
                     continue;
                 }
-                text = text.replaceAt(i, t.open.length, t.open_);
-                text = text.replaceAt(c + (t.open_.length - t.open.length), t.close.length, t.close_);
+                text = replaceAt(text, i, t.open.length, t.open_);
+                text = replaceAt(text, c + (t.open_.length - t.open.length), t.close.length, t.close_);
             }
         }
 
@@ -742,8 +742,8 @@ function convertToHtml(text) {
     return text;
 }
 
-String.prototype.replaceAt = function (index, length, replacement) {
-    return this.substr(0, index) + replacement + this.substr(index + length);
+function replaceAt(text, index, length, replacement) {
+    return text.substr(0, index) + replacement + text.substr(index + length);
 }
 
 function getClosingTagIndex(text, i, tag) {
