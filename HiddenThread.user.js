@@ -640,6 +640,103 @@ function createFileLinksDiv(files) {
     return fileLinksDiv;
 }
 
+const tags = [
+    {
+        open: '[i]',
+        close: '[/i]',
+        open_: "<em>",
+        close_: "</em>"
+    },
+    {
+        open: '[b]',
+        close: '[/b]',
+        open_: "<strong>",
+        close_: "</strong>"
+    },
+    {
+        open: '[spoiler]',
+        close: '[/spoiler]',
+        open_: `<span class=\"spoiler\">`,
+        close_: "</span>"
+    },
+    {
+        open: '[u]',
+        close: '[/u]',
+        open_: `<span class=\"u\">`,
+        close_: "</span>"
+    },
+    {
+        open: '[o]',
+        close: '[/o]',
+        open_: `<span class=\"o\">`,
+        close_: "</span>"
+    },
+    {
+        open: '[s]',
+        close: '[/s]',
+        open_: `<span class=\"s\">`,
+        close_: "</span>"
+    },
+    {
+        open: '[sup]',
+        close: '[/sup]',
+        open_: `<sup>`,
+        close_: "</sup>"
+    },
+    {
+        open: '[sub]',
+        close: '[/sub]',
+        open_: `<sub>`,
+        close_: "</sub>"
+    }
+];
+
+function convertToHtml(text) {
+    let oldStr;
+    do {
+        oldStr = text;
+        text = text.replace('\n', '<br>');
+    } while (oldStr != text);
+    for (let i = 0; i < text.length; i++) {
+        for (let j = 0; j < tags.length; j++) {
+            const t = tags[j];
+            if (text.substring(i, i + t.open.length) === t.open) {
+                let c = getClosingTagIndex(text, i, t);
+                if (c == -1) {
+                    continue;
+                }
+                text = text.replaceAt(i, t.open.length, t.open_);
+                text = text.replaceAt(c + (t.open_.length - t.open.length), t.close.length, t.close_);
+            }
+        }
+
+    }
+    return text;
+}
+
+String.prototype.replaceAt = function (index, length, replacement) {
+    return this.substr(0, index) + replacement + this.substr(index + length);
+}
+
+function getClosingTagIndex(text, i, tag) {
+    i += tag.open.length;
+    let skip = 0;
+    for (; i < text.length; i++) {
+        if (text.substring(i, i + tag.open.length) === tag.open) {
+            skip += 1;
+            continue;
+        }
+
+        if (text.substring(i, i + tag.close.length) === tag.close) {
+            skip -= 1;
+            if (skip == -1) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
 // Добавление HTML скрытопоста к основному посту
 function addHiddenPostToHtml(postId, postResult) {
     console.log(`HiddenThread: Post ${postId} is hidden, its object:`);
@@ -657,7 +754,7 @@ function addHiddenPostToHtml(postId, postResult) {
     postArticle.classList.add("post__message");
 
     let postArticleMessage = document.createElement('div');
-    postArticleMessage.innerText = postResult.post.message;
+    postArticleMessage.innerHTML = convertToHtml(postResult.post.message);
 
     if (postResult.isPrivate) {
         postMetadata.appendChild(createElementFromHTML('<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом</i></div>'));
