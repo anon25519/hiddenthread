@@ -773,6 +773,7 @@ function addHiddenPostToHtml(postId, postResult) {
     postBodyDiv.id = 'hidden_post-body-' + postId;
     postBodyDiv.classList.add("post");
     postBodyDiv.classList.add("post_type_reply");
+    postBodyDiv.classList.add("post_type_hiddenthread");
     postBodyDiv.setAttribute('data-num', String(postId));
 
     let postMetadata = document.createElement('div');
@@ -1279,6 +1280,7 @@ function createInterface() {
         #hiddenPostDiv input[type=button] {
             color: var(--theme_default_btntext);
         }
+        .post_type_hiddenthread { border-left: 3px solid #F00000; border-right: 3px solid #F00000; }
     `
     if (style.styleSheet) {
         // This is required for IE8 and below.
