@@ -101,10 +101,10 @@ function base58ToArray(S) { var d = [], b = [], i, j, c, n; for (i in S) { j = 0
 
 /* Randomize array in-place using Durstenfeld shuffle algorithm */
 // steps: [1, array.length - 1]
-function shuffleArray(array, steps) {
+function shuffleArray(array, steps, trueRandom = false) {
     let end = array.length - 1 - steps;
     if (end < 0) end = 0;
-    let mt = new MersenneTwister(1337);
+    let mt = trueRandom ? Math : new MersenneTwister(1337);
     for (let i = array.length - 1; i > end; i--) {
         let j = Math.floor(mt.random() * (i + 1));
         let temp = array[i];
@@ -941,6 +941,7 @@ async function unzipPostData(zipData) {
                     postMessage = postMessage.substring(0, MESSAGE_MAX_LENGTH) +
                         '...(часть сообщения обрезана, смотри файл ' + filename + ')';
                     let postMessageFileData = await archive.file(filename).async('blob');
+                    postMessageFileData = postMessageFileData.slice(0, postMessageFileData.size, 'text/plain; charset=utf-8');
                     files.push({ 'name': filename, 'data': postMessageFileData });
                 }
             }
