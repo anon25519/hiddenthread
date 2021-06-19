@@ -769,6 +769,8 @@ function getClosingTagIndex(text, i, tag) {
 function addHiddenPostToHtml(postId, postResult) {
     console.log(`HiddenThread: Post ${postId} is hidden, its object:`);
     console.log(postResult);
+
+    let clearPost = document.getElementById('post-' + postId);
     let postBodyDiv = document.createElement('div');
     postBodyDiv.id = 'hidden_post-body-' + postId;
     postBodyDiv.classList.add("post");
@@ -790,6 +792,11 @@ function addHiddenPostToHtml(postId, postResult) {
     }
     let timeString = (new Date(postResult.header.timestamp * 1000))
         .toISOString().replace('T', ' ').replace(/\.\d+Z/g, '');
+    let d = clearPost.getElementsByClassName('post__time')[0].textContent.split(' ');
+    let postDateMs = Date.parse(`20${d[0].split('/')[2]}-${d[0].split('/')[1]}-${d[0].split('/')[0]}T${d[2]}Z`);
+    if (Math.abs(postDateMs/1000 - postResult.header.timestamp) > 24*3600) {
+        timeString += ' <span style="color:red;">(неверное время поста!)</span>';
+    }
     postMetadata.appendChild(createElementFromHTML('<div>Дата создания скрытопоста (UTC): ' + timeString + '</div>'));
     postMetadata.appendChild(createFileLinksDiv(postResult.post.files));
 
@@ -808,7 +815,6 @@ function addHiddenPostToHtml(postId, postResult) {
 
     postBodyDiv.appendChild(postArticle);
 
-    let clearPost = document.getElementById('post-' + postId);
     clearPost.appendChild(document.createElement('br'));
     clearPost.appendChild(postBodyDiv);
 }
