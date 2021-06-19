@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.2
+// @version      0.3
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -19,7 +19,7 @@ const SIGNED_POST_TYPE = 1;
 const MESSAGE_MAX_LENGTH = 30000
 const MAX_FILES_COUNT = 100;
 
-const CURRENT_VERSION = "0.2";
+const CURRENT_VERSION = "0.3";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 
 const injectLib = (url) => {
