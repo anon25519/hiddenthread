@@ -587,7 +587,7 @@ function createHiddenPost() {
         document.getElementById('otherPublicKey').value)
         .then(function (imageResult) {
             let img = document.createElement('img');
-            img.style = "max-width: 100%; max-height: 100%;";
+            img.style = "max-width: 300px;";
             img.src = imageResult.canvas.toDataURL("image/png");
 
             imageContainerDiv.appendChild(createElementFromHTML('<span>Сохрани изображение ниже и вставь в форму отправки, если оно не вставилось автоматически:</span>'));
@@ -596,7 +596,34 @@ function createHiddenPost() {
 
             imageResult.canvas.toBlob(function (blob) {
                 blob.name = getFileName();
-                window.FormFiles.addMultiFiles([blob]);
+                if (isDollchan()) {
+                    let containersCount = document.getElementsByClassName('de-hiddencontainer-thumb').length;
+                    let inputFileThumbTemplate =
+                        `<div id="de-hiddencontainer-thumb-${containersCount}" class="de-hiddencontainer-thumb" style="display: inline-block;">`+
+                        `  <div class="de-file">`+
+                        `    <div class="de-file-img">`+
+                        `      <div class="de-file-img" title="${blob.name}">`+
+                        `        <img class="de-file-img" src="${URL.createObjectURL(blob)}">`+
+                        `      </div>`+
+                        `    </div>`+
+                        `  </div>`+
+                        `<input type="button" onclick="`+
+                        `document.getElementById('de-hiddencontainer-input-${containersCount}').value = null;`+
+                        `document.getElementById('de-hiddencontainer-input-${containersCount}').remove();`+
+                        `document.getElementById('de-hiddencontainer-thumb-${containersCount}').remove();" value="X"/>`+
+                        `</div>`;
+                    let inputFileTemplate = `<div style="display: none;"><input id="de-hiddencontainer-input-${containersCount}" type="file" name="formimages[]" class="de-file-input" multiple="true" style="display: none;"></div>'`;
+                    document.getElementsByClassName('postform__raw filer')[0].insertAdjacentHTML("afterbegin", inputFileTemplate);
+                    let file = new File([blob], blob.name, {type: blob.type});
+                    let container = new DataTransfer();
+                    container.items.add(file);
+                    document.getElementById(`de-hiddencontainer-input-${containersCount}`).files = container.files;
+
+                    document.getElementById('de-file-area').insertAdjacentHTML("afterbegin", inputFileThumbTemplate);
+                }
+                else {
+                    window.FormFiles.addMultiFiles([blob]);
+                }
             });
 
             alert('Спрятано ' + imageResult.len + ' байт (занято ' + imageResult.percent + '% изображения)');
@@ -754,7 +781,7 @@ function addHiddenPostToHtml(postId, postResult) {
     postArticle.classList.add("post__message");
 
     let postArticleMessage = document.createElement('div');
-    postArticleMessage.innerHTML = convertToHtml(postResult.post.message);
+    postArticleMessage.innerText = postResult.post.message;
 
     if (postResult.isPrivate) {
         postMetadata.appendChild(createElementFromHTML('<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом</i></div>'));
@@ -777,13 +804,7 @@ function addHiddenPostToHtml(postId, postResult) {
     postArticle.appendChild(document.createElement('br'));
     postArticle.appendChild(postArticleMessage);
 
-    let postRefsDiv = document.createElement('div');
-    postRefsDiv.id = 'hidden_refmap-' + postId;
-    postRefsDiv.classList.add("post__refmap");
-    postRefsDiv.style = 'display: block;';
-
     postBodyDiv.appendChild(postArticle);
-    postBodyDiv.appendChild(postRefsDiv);
 
     let clearPost = document.getElementById('post-' + postId);
     clearPost.appendChild(document.createElement('br'));
@@ -804,11 +825,28 @@ function createElementFromHTML(htmlString) {
     return div.firstElementChild;
 }
 
+// Ссылка на пост в тексте
 function createReplyLink(postId) {
-    let threadId = window.thread.id;
-    return '<a href="/' + window.board + '/res/' + threadId + '.html#' + postId +
-        '" class="post-reply-link" data-thread="' + threadId + '" data-num="' + postId +
-        '">&gt;&gt;' + postId + '</a>';
+    if (isDollchan()) {
+        return `<a href="/${window.board}/res/${window.thread.id}.html#${postId}` +
+            `" class="de-link-postref post-reply-link" data-thread="${window.thread.id}" data-num="${postId}` +
+            `">&gt;&gt;${postId}</a>`;
+    }
+    else {
+        return `<a href="/${window.board}/res/${window.thread.id}.html#${postId}` +
+            `" class="de-link-postref post-reply-link" data-thread="${window.thread.id}" data-num="${postId}` +
+            `">&gt;&gt;${postId}</a>`;
+    }
+}
+
+// Ссылка на пост в ответах
+function createPostRefLink(postId) {
+    if (isDollchan()) {
+        return `<a href="#${postId}" class="de-link-backref">&gt;&gt;${postId}</a><span class="de-refcomma">, </span>`;
+    }
+    else {
+        return createReplyLink(postId);
+    }
 }
 
 function addReplyLinks(postId, text) {
@@ -830,16 +868,28 @@ function addReplyLinks(postId, text) {
             postArticle.innerHTML.substr(match.index + indexDiff + oldLength);
         indexDiff += replyStr.length - oldLength;
 
+        if (isDollchan())
+        {
+            let deRefmap = document.getElementById('post-' + refPostId).getElementsByClassName('de-refmap')[0];
+            if (!deRefmap)
+            {
+                let deRefmapTemplate = `<div class="de-refmap"></div>`;
+                document.getElementById('m' + refPostId).insertAdjacentHTML('afterend', deRefmapTemplate);
+            }
+        }
+
         if (!refPostIdSet.has(refPostId)) {
             refPostIdSet.add(refPostId);
+            console.log(document.getElementById('post-' + refPostId).getElementsByClassName('de-refmap'));
+            console.log(document.getElementById('refmap-' + refPostId));
             // Добавление ссылки на текущий пост в ответы другого поста
             // В HTML:
             let refPostRefs =
-                document.getElementById('hidden_refmap-' + refPostId) ||
+                document.getElementById('post-' + refPostId).getElementsByClassName('de-refmap')[0] ||
                 document.getElementById('refmap-' + refPostId);
             if (refPostRefs != null) {
                 refPostRefs.style = "display: block;";
-                refPostRefs.appendChild(createElementFromHTML(createReplyLink(postId)));
+                refPostRefs.appendChild(createElementFromHTML(createPostRefLink(postId)));
 
                 // В Object (для всплывающих постов):
                 let refPost = thread.getPostsObj()[refPostId];
@@ -857,6 +907,7 @@ function addReplyLinks(postId, text) {
 function renderHiddenPost(postId, postResult) {
     addHiddenPostToHtml(postId, postResult);
     addReplyLinks(postId, postResult.post.message);
+    // TODO: отображение скрытопостов во всплывающих постах с куклоскриптом
     addHiddenPostToObj(postId); // Текст скрытопоста берется из HTML
 }
 
@@ -1073,9 +1124,10 @@ async function loadPostFromImage(img, password, privateKey) {
 
 /* Перепроверить все посты */
 function reloadHiddenPosts() {
-    // очистить список скаченных изображений
+    // очистить список скаченных и просмотренных изображений
     // чтобы они снова скачались и просканировались
     loadedImages = new Set();
+    watchedImages = new Set();
     loadHiddenThread();
 }
 
@@ -1139,7 +1191,8 @@ function createInterface() {
             : "Закрыть"
     }
     let formTemplate = `
-        <div id="hiddenPostDiv">
+        <br>
+        <div id="hiddenPostDiv" style="display: inline-block; text-align: left;">
             <hr>
             <div style="position: relative; display: flex; justify-content: center; align-items: center">
                 <p style="font-size:x-large;">Скрытотред ${CURRENT_VERSION}</p>
@@ -1206,7 +1259,7 @@ function createInterface() {
                 <div align="center">
                     <input id="createHiddenPostButton" type="button" value="Создать картинку со скрытопостом" style="padding: 5px;">
                 </div>
-                <div id="imageContainerDiv" />
+                <div id="imageContainerDiv" align="center" />
             </div>
             <div style="display: flex; justify-content: center;">
                 <span id="versionInfo"></span>
@@ -1235,7 +1288,7 @@ function createInterface() {
     document.head.appendChild(style)
 
     // render
-    document.getElementById('postform').insertAdjacentHTML("beforeend", formTemplate);
+    document.getElementById('postform').insertAdjacentHTML(isDollchan() ? 'afterend' : 'beforeend', formTemplate);
 
     // listeners
 
@@ -1291,6 +1344,8 @@ postsToScan{
 */
 function getPostsToScan()
 {
+    if (isDollchan()) return getPostsToScanFromHtml();
+
     let threadId = window.thread.id;
     let thread = window.Post(threadId);
     let postsToScan = [];
@@ -1304,8 +1359,8 @@ function getPostsToScan()
         return getPostsToScanFromHtml();
     }
 
-    for (let i = 0; i < postIdList.length; i++) {
-        let postAjax = thread.getPostsObj()[String(postIdList[i])].ajax;
+    for (let postId of postIdList) {
+        let postAjax = thread.getPostsObj()[String(postId)].ajax;
         if (!postAjax) continue;
 
         let postFiles = postAjax.files;
@@ -1314,14 +1369,14 @@ function getPostsToScan()
         }
 
         let urls = [];
-        for (let i = 0; i < postFiles.length; i++) {
-            if (postFiles[i].path.endsWith('.png')) {
-                urls.push(postFiles[i].path);
+        for (let file of postFiles) {
+            if (file.path.endsWith('.png')) {
+                urls.push(file.path);
             }
         }
         postsToScan.push({
             urls: urls,
-            postId: postIdList[i]
+            postId: postId
         });
     }
 
@@ -1330,27 +1385,28 @@ function getPostsToScan()
 
 function getPostsToScanFromHtml() {
     let postsToScan = [];
-    var post_images = document.getElementsByClassName('post__images');
+    let post_images = document.getElementsByClassName('post__images');
     for (let img of post_images) {
         let urls_html = img.getElementsByClassName('post__image-link');
         let urls = [];
-        for (let i = 0; i < urls_html.length; i++) {
-            urls.push(urls_html[i].href)
+        for (let url of urls_html) {
+            if (url.href.endsWith('.png')) {
+                urls.push(url.href);
+            }
         }
 
-        if (urls.endsWith('.png'))
-        {
-            postsToScan.push({
-                urls: urls,
-                postId: img.parentNode.getAttribute('data-num')
-            });
-        }
+        postsToScan.push({
+            urls: urls,
+            postId: img.parentNode.getAttribute('data-num')
+        });
     }
 
     return postsToScan;
 }
 
 
+// множество просмотренных url картинок
+var watchedImages = new Set();
 // множество url с скаченными картинками
 var loadedImages = new Set();
 // множество url с загруженными скрытопостами
@@ -1369,16 +1425,14 @@ function loadHiddenThread() {
 
     document.getElementById("imagesCount").textContent = getImagesCount(postsToScan).toString();
 
-    for (let i = 0; i < postsToScan.length; i++) {
-        const post_id = postsToScan[i].postId;
-        for (let j = 0; j < postsToScan[i].urls.length; j++) {
-            const url = postsToScan[i].urls[j];
-
-            if (loadedImages.has(url) || loadedPosts.has(url)) {
+    for (let post of postsToScan) {
+        for (let url of post.urls) {
+            if (loadedImages.has(url) || loadedPosts.has(url) || watchedImages.has(url)) {
                 continue;
             }
+            watchedImages.add(url);
 
-            loadPost(post_id, url);
+            loadPost(post.postId, url);
         }
     }
     document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
@@ -1399,6 +1453,10 @@ createInterface();
 
 // Выбираем элемент
 var target = document.querySelector('#posts-form');
+function isDollchan()
+{
+    return document.getElementsByClassName('de-runned').length;
+}
 
 if (!target) {
     // Установлена кукла
@@ -1418,4 +1476,4 @@ injectLib("https://cdn.rawgit.com/indutny/elliptic/43ac7f230069bd1575e1e4a58394a
 
 CheckVersion();
 
-setTimeout(loadHiddenThread, 5000);
+setInterval(loadHiddenThread, 5000);
