@@ -976,7 +976,9 @@ async function loadPostFromImage(img, password, privateKey) {
 
 /* Перепроверить все посты */
 function reloadHiddenPosts() {
-    watchedImages = new Set();
+    // очистить список скаченных изображений
+    // чтобы они снова скачались и просканировались
+    loadedImages = new Set();
     loadHiddenThread();
 }
 
@@ -997,8 +999,8 @@ function loadPost(postId, file_url) {
             document.getElementById('privateKey').value)
             .then(function (postResult) {
                 if (postResult == null) return;
-                loadedImages.add(file_url);
-                document.getElementById("hiddenPostsLoadedCount").textContent = loadedImages.size;
+                loadedPosts.add(file_url);
+                document.getElementById("hiddenPostsLoadedCount").textContent = loadedPosts.size;
                 renderHiddenPost(postId, postResult);
             });
     });
@@ -1043,7 +1045,7 @@ function createInterface() {
         <div id="hiddenPostDiv">
             <hr>
             <div style="position: relative; display: flex; justify-content: center; align-items: center">
-                <p style="font-size:x-large;">Скрытотред v0.2</p>
+                <p style="font-size:x-large;">Скрытотред ${CURRENT_VERSION}</p>
                 <span id="hiddenThreadToggle" style="position: absolute; right: 0; cursor: pointer">${toggleText()}</span>
             </div>
             <div id="hiddenThreadForm" style="display: ${storage.hide ? 'none' : ''}">
@@ -1229,6 +1231,7 @@ function getPostsToScan()
 }
 
 function getPostsToScanFromHtml() {
+    let postsToScan = [];
     var post_images = document.getElementsByClassName('post__images');
     for (let img of post_images) {
         let urls_html = img.getElementsByClassName('post__image-link');
@@ -1249,10 +1252,11 @@ function getPostsToScanFromHtml() {
     return postsToScan;
 }
 
-// Множество просмотренных url
-var watchedImages = new Set();
-// множество url с нарисованными скрытопостами
+
+// множество url с скаченными картинками
 var loadedImages = new Set();
+// множество url с загруженными скрытопостами
+var loadedPosts = new Set();
 let scanning = false;
 /*
 Просмотреть все посты и попробовать расшифровать
@@ -1272,14 +1276,14 @@ function loadHiddenThread() {
         for (let j = 0; j < postsToScan[i].urls.length; j++) {
             const url = postsToScan[i].urls[j];
 
-            if (loadedImages.has(url) || watchedImages.has(url)) {
+            if (loadedImages.has(url) || loadedPosts.has(url)) {
                 continue;
             }
 
-            watchedImages.add(url);
             loadPost(post_id, url);
         }
     }
+    document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
     scanning = false;
 }
 
