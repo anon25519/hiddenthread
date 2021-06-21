@@ -42,6 +42,9 @@
 - Цифровая подпись поста приватным ключом (`ECDSA` `P-256`).
 - Отправка приватных сообщений, которые сможет расшифровать только получатель (`ECDH` `P-256`).
 
+### Известные ошибки
+* В браузере `LibreWolf` ошибка `Blocked https://2ch.hk/.../res/...html from extracting canvas data because no user input was detected.` Для исправления зайдите в `about:config` и измените параметр `privacy.resistFingerprinting.autoDeclineNoUserInputCanvasPrompts` на `false`.
+
 ### История версий
 - [0.3](../../pull/5)
 - [0.2](../../pull/4)
