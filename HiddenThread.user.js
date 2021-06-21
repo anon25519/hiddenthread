@@ -720,11 +720,18 @@ const tags = [
 ];
 
 function convertToHtml(text) {
-    let oldStr;
-    do {
-        oldStr = text;
-        text = text.replace('\n', '<br>');
-    } while (oldStr != text);
+    let lines = text.split('\n');
+    text = "";
+    for (let i = 0; i < lines.length; i++) {
+        console.log(lines[i]);
+        if (lines[i].length > 2) {
+            if (lines[i].trim().startsWith(">")) {
+                text += `<span class="unkfunc">${lines[i]}</span><br>`;
+                continue;
+            }
+        }
+        text += `${lines[i]}<br>`;
+    }
     for (let i = 0; i < text.length; i++) {
         for (let j = 0; j < tags.length; j++) {
             const t = tags[j];
