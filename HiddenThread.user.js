@@ -17,7 +17,8 @@ const NORMAL_POST_TYPE = 0;
 const SIGNED_POST_TYPE = 1;
 
 const MESSAGE_MAX_LENGTH = 30000
-const MAX_FILES_COUNT = 100;
+const MAX_FILES_COUNT = 9;
+const MAX_FILENAME_LENGTH = 20;
 
 const CURRENT_VERSION = "0.3.1";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
@@ -636,14 +637,27 @@ function createHiddenPost() {
         });
 }
 
-function createFileLinksDiv(files) {
+function createFileLinksDiv(files, hasSkippedFiles, postId) {
+    function createDownloadLink(name, text, blobLink) {
+        let downloadLink = document.createElement('a');
+        downloadLink.download = name;
+        downloadLink.innerText = text;
+        downloadLink.href = blobLink;
+        return downloadLink;
+    }
+
     let fileLinksDiv = document.createElement('div');
     if (files.length == 0) {
         return fileLinksDiv;
     }
 
-    fileLinksDiv.innerHTML += 'Файлы: ';
-    for (let i = 0; i < files.length; i++) {
+    let normalFilesCount = hasSkippedFiles > 0 ? files.length - 1 : files.length;
+    for (let i = 0; i < normalFilesCount; i++) {
+        let filename = files[i].name;
+        if (filename.length > MAX_FILENAME_LENGTH) {
+            filename = filename.substring(0, MAX_FILENAME_LENGTH - 10) + '[...]' +
+                filename.substring(filename.length - 5);
+        }
         let mime = files[i].data.type;
         let blobLink = URL.createObjectURL(files[i].data);
         // Если тип известен, создаем ссылку для открытия файла
@@ -651,21 +665,27 @@ function createFileLinksDiv(files) {
         if (mime) {
             let link = document.createElement('a');
             link.target = "_blank";
-            link.innerText = files[i].name;
+            link.innerText = filename;
             link.href = blobLink;
             fileLinksDiv.appendChild(link);
             fileLinksDiv.innerHTML += ' ';
         }
 
-        let downloadLink = document.createElement('a');
-        downloadLink.download = files[i].name;
-        downloadLink.innerText = (mime ? '' : files[i].name) + ' \u2193';
-        downloadLink.href = blobLink;
-        fileLinksDiv.appendChild(downloadLink);
+        fileLinksDiv.appendChild(createDownloadLink(files[i].name,
+            (mime ? '' : filename) + ' \u2193', blobLink));
 
-        if (i < files.length - 1) {
+        if (i < normalFilesCount - 1) {
             fileLinksDiv.innerHTML += ', ';
         }
+    }
+    if (hasSkippedFiles > 0) {
+        let allFiles = createDownloadLink(`all_files_${postId}.zip`,
+            'скачать все', URL.createObjectURL(files[files.length - 1].data)).outerHTML;
+        fileLinksDiv.innerHTML = `Файлы (${allFiles}): ` + fileLinksDiv.innerHTML;
+        fileLinksDiv.innerHTML += ` (некоторые файлы пропущены)`;
+    }
+    else {
+        fileLinksDiv.innerHTML = 'Файлы: ' + fileLinksDiv.innerHTML;
     }
     return fileLinksDiv;
 }
@@ -725,7 +745,6 @@ function convertToHtml(text) {
     let lines = text.split('\n');
     text = "";
     for (let i = 0; i < lines.length; i++) {
-        console.log(lines[i]);
         if (lines[i].length > 2) {
             if (lines[i].trim().startsWith("&gt;")) {
                 text += `<span class="unkfunc">${lines[i]}</span><br>`;
@@ -807,7 +826,7 @@ function addHiddenPostToHtml(postId, postResult) {
         timeString += ' <span style="color:red;">(неверное время поста!)</span>';
     }
     postMetadata.appendChild(createElementFromHTML('<div>Дата создания скрытопоста (UTC): ' + timeString + '</div>'));
-    postMetadata.appendChild(createFileLinksDiv(postResult.post.files));
+    postMetadata.appendChild(createFileLinksDiv(postResult.post.files, postResult.post.hasSkippedFiles, postId));
 
     if (postResult.verifyResult != null) {
         let postArticleSign = document.createElement('div');
@@ -820,7 +839,8 @@ function addHiddenPostToHtml(postId, postResult) {
     }
     postArticle.appendChild(postMetadata);
     if (postResult.post.unpackResult) {
-        postArticle.appendChild(createElementFromHTML(`<div style="color:red;">${postResult.post.unpackResult}</div>`));
+        postArticle.appendChild(createElementFromHTML(
+            `<div style="font-family:courier new;color:red;">${postResult.post.unpackResult}</div>`));
     }
     postArticle.appendChild(document.createElement('br'));
     postArticle.appendChild(postArticleMessage);
@@ -873,7 +893,6 @@ function addReplyLinks(postId, refPostIdList) {
     let thread = window.Post(window.thread.id);
 
     let refPostIdSet = new Set();
-    let indexDiff = 0;
     for (const refPostId of refPostIdList) {
 
         if (isDollchan())
@@ -947,6 +966,7 @@ async function unzipPostData(zipData) {
     let zip = new JSZip();
 
     let unpackResult = null;
+    let hasSkippedFiles = false;
     let postMessage = '';
     let files = [];
     let filesCount = 0;
@@ -955,7 +975,11 @@ async function unzipPostData(zipData) {
 
         for (const filename in archive.files) {
             filesCount++;
-            if (filesCount > MAX_FILES_COUNT) break;
+            if (filesCount > MAX_FILES_COUNT) {
+                hasSkippedFiles = true;
+                files.push({ 'name': '_allFiles.zip', 'data': new Blob([zipData], {type: 'application/zip'}) });
+                break;
+            }
 
             if (filename == '_post.txt') {
                 postMessage = await archive.file(filename).async('string');
@@ -993,7 +1017,12 @@ async function unzipPostData(zipData) {
         unpackResult = 'Не удалось распаковать весь пост, контейнер поврежден';
     }
 
-    return { 'message': postMessage, 'files': files, 'unpackResult': unpackResult };
+    return {
+        'message': postMessage,
+        'files': files,
+        'hasSkippedFiles': hasSkippedFiles,
+        'unpackResult': unpackResult
+    };
 }
 
 async function verifyPostData(data) {
