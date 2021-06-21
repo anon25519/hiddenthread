@@ -725,7 +725,7 @@ function convertToHtml(text) {
     for (let i = 0; i < lines.length; i++) {
         console.log(lines[i]);
         if (lines[i].length > 2) {
-            if (lines[i].trim().startsWith(">")) {
+            if (lines[i].trim().startsWith("&gt;")) {
                 text += `<span class="unkfunc">${lines[i]}</span><br>`;
                 continue;
             }
@@ -867,24 +867,12 @@ function createPostRefLink(postId) {
     }
 }
 
-function addReplyLinks(postId, text) {
+function addReplyLinks(postId, refPostIdList) {
     let thread = window.Post(window.thread.id);
-    let postArticle = document.getElementById('hidden_m' + postId);
-
-    let linkRegex = '&gt;&gt;(\\d{1,10})';
-    const linkMatches = postArticle.innerHTML.matchAll(linkRegex);
 
     let refPostIdSet = new Set();
     let indexDiff = 0;
-    for (const match of linkMatches) {
-        let refPostId = match[1];
-
-        // Добавление ссылки на другой пост (замена текста ">>..." на ссылку) в HTML
-        let replyStr = createReplyLink(refPostId);
-        let oldLength = '&gt;&gt;'.length + refPostId.length;
-        postArticle.innerHTML = postArticle.innerHTML.substr(0, match.index + indexDiff) + replyStr +
-            postArticle.innerHTML.substr(match.index + indexDiff + oldLength);
-        indexDiff += replyStr.length - oldLength;
+    for (const refPostId of refPostIdList) {
 
         if (isDollchan())
         {
@@ -921,9 +909,34 @@ function addReplyLinks(postId, text) {
     }
 }
 
+function parseMessage(message)
+{
+    message = message
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
+
+    let refPostIdList = [];
+
+    message = message.replaceAll(new RegExp('&gt;&gt;(\\d{1,10})', 'g'),
+        function(m, s) {
+            refPostIdList.push(s);
+            return createReplyLink(s);
+        });
+
+    return {
+        'message': message,
+        'refPostIdList': refPostIdList
+    }
+};
+
 function renderHiddenPost(postId, postResult) {
+    let res = parseMessage(postResult.post.message);
+    postResult.post.message = res.message;
     addHiddenPostToHtml(postId, postResult);
-    addReplyLinks(postId, postResult.post.message);
+    addReplyLinks(postId, res.refPostIdList);
     // TODO: отображение скрытопостов во всплывающих постах с куклоскриптом
     addHiddenPostToObj(postId); // Текст скрытопоста берется из HTML
 }
