@@ -438,6 +438,7 @@ async function hideDataToImage(file, data) {
     canvas.height = imageBitmap.height;
 
     let ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
     ctx.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
     let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
@@ -644,13 +645,14 @@ function createFileLinksDiv(files) {
     fileLinksDiv.innerHTML += 'Файлы: ';
     for (let i = 0; i < files.length; i++) {
         let mime = files[i].data.type;
+        let blobLink = URL.createObjectURL(files[i].data);
         // Если тип известен, создаем ссылку для открытия файла
         // в новой вкладке, иначе только ссылку для скачивания
         if (mime) {
             let link = document.createElement('a');
             link.target = "_blank";
             link.innerText = files[i].name;
-            link.href = URL.createObjectURL(files[i].data);
+            link.href = blobLink;
             fileLinksDiv.appendChild(link);
             fileLinksDiv.innerHTML += ' ';
         }
@@ -658,7 +660,7 @@ function createFileLinksDiv(files) {
         let downloadLink = document.createElement('a');
         downloadLink.download = files[i].name;
         downloadLink.innerText = (mime ? '' : files[i].name) + ' \u2193';
-        downloadLink.href = URL.createObjectURL(files[i].data);
+        downloadLink.href = blobLink;
         fileLinksDiv.appendChild(downloadLink);
 
         if (i < files.length - 1) {
@@ -1104,6 +1106,7 @@ async function loadPostFromImage(img, password, privateKey) {
     canvas.width = img.width;
     canvas.height = img.height;
     let ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
