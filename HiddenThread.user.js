@@ -1513,33 +1513,22 @@ function getImagesCount(postsToScan) {
     return r;
 }
 
-createInterface();
-
-/* Отслеживание новых постов */
-
-// Выбираем элемент
-var target = document.querySelector('#posts-form');
-function isDollchan()
-{
+function isDollchan() {
     return document.getElementsByClassName('de-runned').length;
 }
 
-if (!target) {
-    // Установлена кукла
-    let threadId = document.URL.toString().split('.')[1].split('/')[3];
-    target = document.querySelector(`#thread-${threadId}`);
-    console.log(target);
+function isMakaba() {
+    return document.getElementsByClassName('makaba').length
 }
 
-if (!target) {
-    // Не в треде
-    return;
-}
+// Работаем только на главной и в тредах
+if (!isMakaba()) return;
 
 injectLib("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js");
 injectLib("https://cdn.jsdelivr.net/npm/mersennetwister@0.2.3/src/MersenneTwister.min.js");
 injectLib("https://cdn.rawgit.com/indutny/elliptic/43ac7f230069bd1575e1e4a58394a512303ba803/dist/elliptic.min.js");
 
+createInterface();
 CheckVersion();
 
 setInterval(loadHiddenThread, 5000);
