@@ -1356,7 +1356,21 @@ function createInterface() {
     // render
     document.getElementById('postform').insertAdjacentHTML(isDollchan() ? 'afterend' : 'beforeend', formTemplate);
 
+    document.getElementsByClassName('adminbar__boards')[0].insertAdjacentHTML(
+        'beforeend', `
+        <span>&nbsp;&nbsp;&nbsp;&nbsp;HiddenThread:
+        <a id="hideNormalPosts" href="#">Свернуть/развернуть все обычные посты</a>
+        | <a id="hiddenThreadSettings" href="#">Настройки</a>
+        </span>`);
+
+
     // listeners
+    let hideEl = document.getElementById('hideNormalPosts');
+    hideEl.onclick = function () {
+        hidePosts(watchedPosts);
+        hideEl.value = !hideEl.value;
+    }
+    hideEl.value = false;
 
     let toggleEl = document.getElementById("hiddenThreadToggle")
     toggleEl.onclick = () => {
@@ -1400,6 +1414,20 @@ function createInterface() {
     }
 }
 
+function hidePosts(posts) {
+    for (let post of posts) {
+        let body = document.getElementById(`post-body-${post}`);
+        if (isDollchan()) {
+            body.getElementsByClassName('post__message')[0].classList.toggle('de-post-hiddencontent');
+            if (body.getElementsByClassName('post__images')[0]) body.getElementsByClassName('post__images')[0].classList.toggle('de-post-hiddencontent');
+            if (body.getElementsByClassName('post__refmap')[0]) body.getElementsByClassName('post__refmap')[0].classList.toggle('de-post-hiddencontent');
+        }
+        else {
+            body.classList.toggle('post_type_hidden');
+        }
+    }
+}
+
 // Получить посты, которые нужно просмотреть
 /*
 Возвращает объект:
@@ -1430,9 +1458,6 @@ function getPostsToScan()
         if (!postAjax) continue;
 
         let postFiles = postAjax.files;
-        if (postFiles.length == 0) {
-            continue;
-        }
 
         let urls = [];
         for (let file of postFiles) {
@@ -1451,19 +1476,22 @@ function getPostsToScan()
 
 function getPostsToScanFromHtml() {
     let postsToScan = [];
-    let post_images = document.getElementsByClassName('post__images');
-    for (let img of post_images) {
-        let urls_html = img.getElementsByClassName('post__image-link');
+    let posts = document.getElementsByClassName('post');
+
+    for (let post of posts) {
+        let postImages = post.getElementsByClassName('post__images');
         let urls = [];
-        for (let url of urls_html) {
-            if (url.href.endsWith('.png')) {
-                urls.push(url.href);
+        for (let img of postImages) {
+            let urlsHtml = img.getElementsByClassName('post__image-link');
+            for (let url of urlsHtml) {
+                if (url.href.endsWith('.png')) {
+                    urls.push(url.href);
+                }
             }
         }
-
         postsToScan.push({
             urls: urls,
-            postId: img.parentNode.getAttribute('data-num')
+            postId: post.getAttribute('data-num')
         });
     }
 
@@ -1471,6 +1499,8 @@ function getPostsToScanFromHtml() {
 }
 
 
+// множество просмотренных постов
+var watchedPosts = new Set();
 // множество просмотренных url картинок
 var watchedImages = new Set();
 // множество url с скаченными картинками
@@ -1499,6 +1529,12 @@ function loadHiddenThread() {
             watchedImages.add(url);
 
             loadPost(post.postId, url);
+        }
+        if (!watchedPosts.has(post.postId)) {
+            watchedPosts.add(post.postId);
+            if (document.getElementById('hideNormalPosts').value) {
+                hidePosts([post.postId]);
+            }
         }
     }
     document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
