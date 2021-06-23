@@ -849,6 +849,13 @@ function addHiddenPostToHtml(postId, postResult) {
 
     clearPost.appendChild(document.createElement('br'));
     clearPost.appendChild(postBodyDiv);
+
+    // Переносим ссылки на скрытопосты в тело скрытопоста, если они ещё не там
+    let normalPostBody = document.getElementById(`post-${postId}`);
+    let hiddenPostsRefmap = normalPostBody.querySelector(`#ht_refmap-${postId}`);
+    if (hiddenPostsRefmap) {
+        document.getElementById(`hidden_m${postId}`).insertAdjacentElement('afterend', hiddenPostsRefmap);
+    }
 }
 
 // Добавление HTML скрытопоста в объект основного поста (для всплывающих постов)
@@ -867,16 +874,9 @@ function createElementFromHTML(htmlString) {
 
 // Ссылка на пост в тексте
 function createReplyLink(postId) {
-    if (isDollchan()) {
-        return `<a href="/${window.board}/res/${window.thread.id}.html#${postId}` +
-            `" class="de-link-postref post-reply-link" data-thread="${window.thread.id}" data-num="${postId}` +
-            `">&gt;&gt;${postId}</a>`;
-    }
-    else {
-        return `<a href="/${window.board}/res/${window.thread.id}.html#${postId}` +
-            `" class="de-link-postref post-reply-link" data-thread="${window.thread.id}" data-num="${postId}` +
-            `">&gt;&gt;${postId}</a>`;
-    }
+    return `<a href="/${window.board}/res/${window.thread.id}.html#${postId}" ` +
+        `class="${isDollchan() ? 'de-link-postref' : ''} post-reply-link" ` +
+        `data-thread="${window.thread.id}" data-num="${postId}">&gt;&gt;${postId}</a>`;
 }
 
 // Ссылка на пост в ответах
@@ -894,14 +894,26 @@ function addReplyLinks(postId, refPostIdList) {
 
     let refPostIdSet = new Set();
     for (const refPostId of refPostIdList) {
+        let postEl = document.getElementById(`post-${refPostId}`);
+        if (!postEl) continue;
 
-        if (isDollchan())
-        {
-            let deRefmap = document.getElementById('post-' + refPostId).getElementsByClassName('de-refmap')[0];
-            if (!deRefmap)
-            {
-                let deRefmapTemplate = `<div class="de-refmap"></div>`;
-                document.getElementById('m' + refPostId).insertAdjacentHTML('afterend', deRefmapTemplate);
+        let hiddenPostsRefmap = document.getElementById(`ht_refmap-${refPostId}`);
+        // Если списка с ответами на скрытопосты ещё не существует, создаём его и помещаем
+        // в тело скрытопоста (либо в тело обычного поста, если скрытопост ещё не создан)
+        if (!hiddenPostsRefmap) {
+            if (isDollchan()) {
+                hiddenPostsRefmap = createElementFromHTML(`<div id="ht_refmap-${refPostId}" class="de-refmap"></div>`);
+            }
+            else {
+                hiddenPostsRefmap = createElementFromHTML(`<div id="ht_refmap-${refPostId}" class="post__refmap" style="display: block;"></div>`);
+            }
+
+            let hiddenPostEl = document.getElementById(`hidden_post-body-${refPostId}`);
+            if (!hiddenPostEl) {
+                document.getElementById(`m${refPostId}`).insertAdjacentElement('afterend', hiddenPostsRefmap);
+            }
+            else {
+                document.getElementById(`hidden_m${refPostId}`).insertAdjacentElement('afterend', hiddenPostsRefmap);
             }
         }
 
@@ -909,22 +921,15 @@ function addReplyLinks(postId, refPostIdList) {
             refPostIdSet.add(refPostId);
             // Добавление ссылки на текущий пост в ответы другого поста
             // В HTML:
-            let refPostRefs =
-                (document.getElementById('post-' + refPostId) &&
-                 document.getElementById('post-' + refPostId).getElementsByClassName('de-refmap')[0]) ||
-                document.getElementById('refmap-' + refPostId);
-            if (refPostRefs != null) {
-                refPostRefs.style = "display: block;";
-                refPostRefs.appendChild(createElementFromHTML(createPostRefLink(postId)));
+            hiddenPostsRefmap.appendChild(createElementFromHTML(createPostRefLink(postId)));
 
-                // В Object (для всплывающих постов):
-                let refPost = thread.getPostsObj()[refPostId];
-                if (refPost) {
-                    if (refPost.replies == undefined) {
-                        refPost.replies = new Array();
-                    }
-                    refPost.replies.push(postId);
+            // В Object (для всплывающих постов):
+            let refPost = thread.getPostsObj() && thread.getPostsObj()[refPostId];
+            if (refPost) {
+                if (!refPost.replies) {
+                    refPost.replies = new Array();
                 }
+                if (!(postId in refPost.replies)) refPost.replies.push(postId);
             }
         }
     }
@@ -1419,8 +1424,15 @@ function hidePosts(posts) {
         let body = document.getElementById(`post-body-${post}`);
         if (isDollchan()) {
             body.getElementsByClassName('post__message')[0].classList.toggle('de-post-hiddencontent');
-            if (body.getElementsByClassName('post__images')[0]) body.getElementsByClassName('post__images')[0].classList.toggle('de-post-hiddencontent');
-            if (body.getElementsByClassName('post__refmap')[0]) body.getElementsByClassName('post__refmap')[0].classList.toggle('de-post-hiddencontent');
+            if (body.getElementsByClassName('post__images')[0]) {
+                body.getElementsByClassName('post__images')[0].classList.toggle('de-post-hiddencontent');
+            }
+            let refmaps = body.getElementsByClassName('de-refmap');
+            if (refmaps) {
+                for (let r of refmaps) {
+                    r.classList.toggle('de-post-hiddencontent');
+                }
+            }
         }
         else {
             body.classList.toggle('post_type_hidden');
