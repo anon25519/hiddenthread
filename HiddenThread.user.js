@@ -22,6 +22,7 @@ const MAX_FILENAME_LENGTH = 20;
 
 const CURRENT_VERSION = "0.3.1";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
+const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
 const injectLib = (url) => {
     let lib = document.createElement("script");
@@ -1242,13 +1243,18 @@ function CheckVersion() {
     request.onreadystatechange = function () {
         if (request.readyState === 4 && request.status === 200) {
             console.log(`Актуальная версия HiddenThread: ${request.responseText}`);
+            let infoDiv = document.getElementById('versionInfo');
+            infoDiv.innerHTML = '';
+            let info = document.createElement('span');
             if (CURRENT_VERSION === request.responseText) {
-                document.getElementById('versionInfo').style = "color: green";
-                document.getElementById('versionInfo').textContent = "У вас актуальная версия скрипта";
+                info.style = 'color: green';
+                info.textContent = 'У вас актуальная версия скрипта';
             } else {
-                document.getElementById('versionInfo').style = "color: red";
-                document.getElementById('versionInfo').textContent = "Ваша версия скрипта устарела";
+                info.style = 'color: red';
+                info.textContent = 'Ваша версия скрипта устарела';
+                infoDiv.insertAdjacentHTML('afterbegin', `(<a href="${SCRIPT_SOURCE}">обновить</a>)`);
             }
+            infoDiv.insertAdjacentElement('afterbegin', info);
         }
     };
     request.send(null); // Send the request now
@@ -1331,9 +1337,7 @@ function createInterface() {
                 </div>
                 <div id="imageContainerDiv" align="center" />
             </div>
-            <div style="display: flex; justify-content: center;">
-                <span id="versionInfo"></span>
-            </div>
+            <div id="versionInfo" style="display: flex; justify-content: center;"></div>
             <hr>
         </div>
     `
