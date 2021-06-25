@@ -426,22 +426,33 @@ function extractDataFromArray(array, data) {
 
 
 
-async function hideDataToImage(file, data) {
-    let imageBitmap = await createImageBitmap(file);
+async function hideDataToImage(container, data, maxDataRatio) {
+    let imageBitmap = await createImageBitmap(container.image);
     let rgbCount = imageBitmap.width * imageBitmap.height * 3;
-    if (rgbCount < data.length) {
+
+    let scale = 1;
+    if (container.maxDataRatio != 0) {
+        // Масштабируем изображение так, чтобы отношение данные/картинка
+        // было равно maxDataRatio
+        let ratio = data.length / rgbCount;
+        if (container.isDownscaleAllowed || ratio > container.maxDataRatio) {
+            scale = Math.sqrt(ratio / container.maxDataRatio);
+        }
+    }
+    else if (rgbCount < data.length) {
         let rest = Math.ceil((data.length - rgbCount) / 3);
         throw new Error('Невозможно вместить данные в контейнер, необходимо ещё ' +
             'как минимум ' + rest + ' пикселей. Выбери картинку с большим разрешением.');
     }
 
     let canvas = document.createElement('canvas');
-    canvas.width = imageBitmap.width;
-    canvas.height = imageBitmap.height;
+    canvas.width = imageBitmap.width * scale;
+    canvas.height = imageBitmap.height * scale;
 
     let ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(imageBitmap, 0, 0, canvas.width, canvas.height);
+    ctx.scale(scale, scale);
+    ctx.drawImage(imageBitmap, 0, 0, imageBitmap.width, imageBitmap.height);
     let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
     // Убираем прозрачность
@@ -523,7 +534,7 @@ async function packPost(message, files, privateKey) {
     return data;
 }
 
-async function createHiddenPostImpl(image, message, files, password, privateKey, otherPublicKey) {
+async function createHiddenPostImpl(container, message, files, password, privateKey, otherPublicKey) {
     let oneTimePublicKey = null;
     if (otherPublicKey.length > 0) {
         // Создаем одноразовую пару ключей
@@ -546,7 +557,7 @@ async function createHiddenPostImpl(image, message, files, password, privateKey,
         encryptedData = keyAndData;
     }
 
-    let imageResult = await hideDataToImage(image, encryptedData);
+    let imageResult = await hideDataToImage(container, encryptedData);
 
     return imageResult;
 }
@@ -582,7 +593,17 @@ function createHiddenPost() {
         return;
     }
 
-    createHiddenPostImpl(container,
+    let maxDataRatio = 0;
+    if (document.getElementById('isDataRatioLimited').checked) {
+        maxDataRatio = Math.min(Math.max(parseInt(document.getElementById('maxDataRatio').value), 1), 100) / 100;
+    }
+
+    createHiddenPostImpl(
+        {
+            'image': container,
+            'maxDataRatio': maxDataRatio,
+            'isDownscaleAllowed': document.getElementById('isDownscaleAllowed').checked
+        },
         document.getElementById('hiddenPostInput').value,
         document.getElementById('hiddenFilesInput').files,
         document.getElementById('hiddenThreadPassword').value,
@@ -1331,6 +1352,14 @@ function createInterface() {
                     Публичный ключ получателя: <br>
                     <input placeholder="Без получателя" id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">
                 </div>
+                <div style="padding: 5px;">
+                    <div style="font-size:large;text-align:center;">Настройки контейнера</div>
+                    <div>Подстраивать разрешение картинки под размер поста: <input id="isDataRatioLimited" type="checkbox"></div>
+                    <div id="maxDataRatioDiv" style="display:none">
+                    <div>Точное соответствие (картинка может быть уменьшена): <input id="isDownscaleAllowed" type="checkbox"></div>
+                    <div>Процент заполнения контейнера данными: <input type="number" id="maxDataRatio" min="1" max="100" value="20" style="width:70px"></div>
+                    </div>
+                </div>
                 <br>
                 <div align="center">
                     <input id="createHiddenPostButton" type="button" value="Создать картинку со скрытопостом" style="padding: 5px;">
@@ -1374,6 +1403,11 @@ function createInterface() {
 
 
     // listeners
+    let enlargeCheck = document.getElementById('isDataRatioLimited')
+    enlargeCheck.onchange = function () {
+        document.getElementById('maxDataRatioDiv').style = `display:${enlargeCheck.checked ? 'block' : 'none'}`;
+    }
+
     let hideEl = document.getElementById('hideNormalPosts');
     hideEl.onclick = function () {
         hidePosts(watchedPosts);
