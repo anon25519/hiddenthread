@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.3.1
+// @version      0.4
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -20,7 +20,7 @@ const MESSAGE_MAX_LENGTH = 30000
 const MAX_FILES_COUNT = 9;
 const MAX_FILENAME_LENGTH = 20;
 
-const CURRENT_VERSION = "0.3.1";
+const CURRENT_VERSION = "0.4";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
