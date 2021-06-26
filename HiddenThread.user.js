@@ -426,7 +426,7 @@ function extractDataFromArray(array, data) {
 
 
 
-async function hideDataToImage(container, data, maxDataRatio) {
+async function hideDataToImage(container, data) {
     let imageBitmap = await createImageBitmap(container.image);
     let rgbCount = imageBitmap.width * imageBitmap.height * 3;
 
@@ -446,8 +446,8 @@ async function hideDataToImage(container, data, maxDataRatio) {
     }
 
     let canvas = document.createElement('canvas');
-    canvas.width = imageBitmap.width * scale;
-    canvas.height = imageBitmap.height * scale;
+    canvas.width = Math.ceil(imageBitmap.width * scale);
+    canvas.height = Math.ceil(imageBitmap.height * scale);
 
     let ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
@@ -568,41 +568,45 @@ function createHiddenPost() {
 
     let containers = document.getElementById('hiddenContainerInput').files;
 
-    if (containers.length == 0) {
-        alert('Выбери картинку-контейнер!');
-        return;
-    }
-
-    let containersNum = new Array(containers.length);
-    for (let i = 0; i < containersNum.length; i++) containersNum[i] = i;
-    shuffleArray(containersNum, containersNum.length, true);
-
-    let container = null;
-    for (let num of containersNum) {
-        if (containers[num].type == 'image/png' ||
-            containers[num].type == 'image/jpeg') {
-            container = containers[num];
-            break;
-        }
-    }
-
-    if (!container) {
-        alert(containers.length == 1 ?
-            "Выбранный файл должен быть JPG или PNG картинкой!" :
-            "Хотя бы один из выбранных файлов должен быть JPG или PNG картинкой!");
-        return;
-    }
-
     let maxDataRatio = 0;
+    let isDownscaleAllowed = document.getElementById('isDownscaleAllowed').checked;
     if (document.getElementById('isDataRatioLimited').checked) {
         maxDataRatio = Math.min(Math.max(parseInt(document.getElementById('maxDataRatio').value), 1), 100) / 100;
+    }
+
+    let container = null;
+    if (containers.length > 0) {
+        let containersNum = new Array(containers.length);
+        for (let i = 0; i < containersNum.length; i++) containersNum[i] = i;
+        shuffleArray(containersNum, containersNum.length, true);
+
+        for (let num of containersNum) {
+            if (containers[num].type == 'image/png' ||
+                containers[num].type == 'image/jpeg') {
+                container = containers[num];
+                break;
+            }
+        }
+    
+        if (!container) {
+            alert(containers.length == 1 ?
+                "Выбранный файл должен быть JPG или PNG картинкой!" :
+                "Хотя бы один из выбранных файлов должен быть JPG или PNG картинкой!");
+            return;
+        }
+    }
+    else {
+        // Если не выбрана картинка, создаем пустую 1x1
+        container = new ImageData(new Uint8ClampedArray(4), 1, 1);
+        // Если не выбран процент заполнения, заполняем всё
+        if (maxDataRatio == 0) maxDataRatio = 1;
     }
 
     createHiddenPostImpl(
         {
             'image': container,
             'maxDataRatio': maxDataRatio,
-            'isDownscaleAllowed': document.getElementById('isDownscaleAllowed').checked
+            'isDownscaleAllowed': isDownscaleAllowed
         },
         document.getElementById('hiddenPostInput').value,
         document.getElementById('hiddenFilesInput').files,
@@ -1325,6 +1329,7 @@ function createInterface() {
                     <input placeholder="image.png" id="fileName">
                     <br>
                     <input id="hiddenFilesClearButton" class="mt-1" type="button" value="Очистить список файлов" />
+                    <input id="hiddenContainerClearButton" class="mt-1" type="button" value="Очистить список контейнеров" />
                 </div>
                 <div style="padding: 5px;">
                     <div style="font-size:large;text-align:center;">Подписать пост</div>
@@ -1429,6 +1434,9 @@ function createInterface() {
 
     document.getElementById('hiddenFilesClearButton').onclick = function () {
         document.getElementById('hiddenFilesInput').value = null;
+    }
+    document.getElementById('hiddenContainerClearButton').onclick = function () {
+        document.getElementById('hiddenContainerInput').value = null;
     }
     document.getElementById('createHiddenPostButton').onclick = function () {
         createHiddenPost();
