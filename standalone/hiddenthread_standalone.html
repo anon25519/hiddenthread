@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<head>
+    <title>HiddenThread standalone app</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <script src="hiddenthread.standalone.js"></script>
+</head>
+<body>
+<div style="display: inline-block; text-align: left; min-width: 600px;">
+    <div style="position: relative; display: flex; justify-content: center; align-items: center">
+        <p style="font-size:x-large;">Декодирование скрытопоста</p>
+    </div>
+    <span>Выбери картинку со скрытопостом: </span>
+    <input id="hiddenContainerInputDecode" type="file" multiple="false" />
+    <br>
+    <input id="hiddenDecodeButton" class="mt-1" type="button" value="Декодировать" />
+    <br>
+    <div style="padding:5px;">
+        <span style="padding-right: 5px;">Пароль:</span>
+        <input placeholder="Без пароля" id="hiddenThreadPasswordDecode" />
+    </div>
+    Приватный ключ (ECDSA p256, base58): <br>
+    <input
+        id="privateKeyDecode"
+        placeholder="Без ключа"
+        style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
+    />
+    <br>
+    <span>Результат декодирования скрытопоста: </span>
+    <br>
+    <div id='decodedPost'></div>
+</div>
+<br>
+<div id="hiddenPostDiv" style="display: inline-block; text-align: left; min-width: 600px;">
+    <hr>
+    <div style="position: relative; display: flex; justify-content: center; align-items: center">
+        <p style="font-size:x-large;">Создание скрытопоста</p>
+    </div>
+    <div id="hiddenThreadForm">
+        <div style="padding:5px;">
+            <span style="padding-right: 5px;">Пароль:</span>
+            <input placeholder="Без пароля" id="hiddenThreadPassword" />
+        </div>
+        <textarea
+            id="hiddenPostInput"
+            placeholder="Пиши скрытый текст тут."
+            style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
+            rows="10"
+        ></textarea>
+        <div id="hiddenFilesDiv" style="padding: 5px;">
+            <span>Выбери скрытые файлы: </span>
+            <input id="hiddenFilesInput" type="file" multiple="true" />
+            <br>
+            <span>Выбери картинку-контейнер (из нескольких берется рандомная): </span>
+            <input id="hiddenContainerInput" type="file" multiple="true" />
+            <br>
+            <input id="hiddenFilesClearButton" class="mt-1" type="button" value="Очистить список файлов" />
+            <input id="hiddenContainerClearButton" class="mt-1" type="button" value="Очистить список контейнеров" />
+        </div>
+        <div style="padding: 5px;">
+            <div style="font-size:large;text-align:center;">Подписать пост</div>
+            Приватный ключ (ECDSA p256, base58): <br>
+            <input
+                id="privateKey"
+                placeholder="Без ключа"
+                style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
+            />
+            <br>
+            Публичный ключ:
+            <br>
+            <input
+                id="publicKey"
+                readonly
+                style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px; color: grey;"
+            />
+            <br>
+            <div align="center" class="mt-1">
+                <input id="generateKeyPairButton" type="button" style="padding: 5px;" value="Сгенерировать ключи" />
+            </div>
+        </div>
+        <div style="padding: 5px;">
+            <div style="font-size:large;text-align:center;">Приватный пост</div>
+            Публичный ключ получателя: <br>
+            <input placeholder="Без получателя" id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">
+        </div>
+        <div style="padding: 5px;">
+            <div style="font-size:large;text-align:center;">Настройки контейнера</div>
+            <div>Подстраивать разрешение картинки под размер поста: <input id="isDataRatioLimited" type="checkbox"></div>
+            <div id="maxDataRatioDiv" style="display:none">
+            <div>Точное соответствие (картинка может быть уменьшена): <input id="isDownscaleAllowed" type="checkbox"></div>
+            <div>Процент заполнения контейнера данными: <input type="number" id="maxDataRatio" min="1" max="100" value="20" style="width:70px"></div>
+            </div>
+        </div>
+        <br>
+        <div align="center">
+            <input id="createHiddenPostButton" type="button" value="Создать картинку со скрытопостом" style="padding: 5px;">
+        </div>
+        <div id="imageContainerDiv" align="center" />
+    </div>
+    <div id="versionInfo" style="display: flex; justify-content: center;"></div>
+    <hr>
+</div>
+</body>
