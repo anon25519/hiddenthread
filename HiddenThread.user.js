@@ -2299,7 +2299,7 @@ exports.clearImmediate = typeof clearImmediate === "function" ? clearImmediate :
  * 
  * Do NOT use SRI with dynamically generated files! More information: https://www.jsdelivr.com/using-sri-with-dynamic-files
  */
-!function(t,i){"use strict";"object"==typeof exports?module.exports=i():"function"==typeof define&&define.amd?define(i):t.MersenneTwister=i()}(this,function(){"use strict";var t=624,i=397,s=function(i){void 0===i&&(i=(new Date).getTime()),this.mt=new Array(t),this.mti=625,this.seed(i)};s.prototype.seed=function(i){var s;for(this.mt[0]=i>>>0,this.mti=1;this.mti<t;this.mti++)s=this.mt[this.mti-1]^this.mt[this.mti-1]>>>30,this.mt[this.mti]=(1812433253*((4294901760&s)>>>16)<<16)+1812433253*(65535&s)+this.mti,this.mt[this.mti]>>>=0},s.prototype.seedArray=function(i){var s,h=1,n=0,e=t>i.length?t:i.length;for(this.seed(19650218);e>0;e--)s=this.mt[h-1]^this.mt[h-1]>>>30,this.mt[h]=(this.mt[h]^(1664525*((4294901760&s)>>>16)<<16)+1664525*(65535&s))+i[n]+n,this.mt[h]>>>=0,n++,++h>=t&&(this.mt[0]=this.mt[623],h=1),n>=i.length&&(n=0);for(e=623;e;e--)s=this.mt[h-1]^this.mt[h-1]>>>30,this.mt[h]=(this.mt[h]^(1566083941*((4294901760&s)>>>16)<<16)+1566083941*(65535&s))-h,this.mt[h]>>>=0,++h>=t&&(this.mt[0]=this.mt[623],h=1);this.mt[0]=2147483648},s.prototype.int=function(){var s,h,n=new Array(0,2567483615);if(this.mti>=t){for(625===this.mti&&this.seed(5489),h=0;h<227;h++)s=2147483648&this.mt[h]|2147483647&this.mt[h+1],this.mt[h]=this.mt[h+i]^s>>>1^n[1&s];for(;h<623;h++)s=2147483648&this.mt[h]|2147483647&this.mt[h+1],this.mt[h]=this.mt[h+(i-t)]^s>>>1^n[1&s];s=2147483648&this.mt[623]|2147483647&this.mt[0],this.mt[623]=this.mt[396]^s>>>1^n[1&s],this.mti=0}return s=this.mt[this.mti++],s^=s>>>11,s^=s<<7&2636928640,s^=s<<15&4022730752,(s^=s>>>18)>>>0},s.prototype.int31=function(){return this.int()>>>1},s.prototype.real=function(){return this.int()*(1/4294967295)},s.prototype.realx=function(){return(this.int()+.5)*(1/4294967296)},s.prototype.rnd=function(){return this.int()*(1/4294967296)},s.prototype.random=s.prototype.rnd,s.prototype.rndHiRes=function(){return(67108864*(this.int()>>>5)+(this.int()>>>6))*(1/9007199254740992)};var h=new s;return s.random=function(){return h.rnd()},s});
+module.exports.EvalString = '!function(t,i){"use strict";"object"==typeof exports?module.exports=i():"function"==typeof define&&define.amd?define(i):t.MersenneTwister=i()}(this,function(){"use strict";var t=624,i=397,s=function(i){void 0===i&&(i=(new Date).getTime()),this.mt=new Array(t),this.mti=625,this.seed(i)};s.prototype.seed=function(i){var s;for(this.mt[0]=i>>>0,this.mti=1;this.mti<t;this.mti++)s=this.mt[this.mti-1]^this.mt[this.mti-1]>>>30,this.mt[this.mti]=(1812433253*((4294901760&s)>>>16)<<16)+1812433253*(65535&s)+this.mti,this.mt[this.mti]>>>=0},s.prototype.seedArray=function(i){var s,h=1,n=0,e=t>i.length?t:i.length;for(this.seed(19650218);e>0;e--)s=this.mt[h-1]^this.mt[h-1]>>>30,this.mt[h]=(this.mt[h]^(1664525*((4294901760&s)>>>16)<<16)+1664525*(65535&s))+i[n]+n,this.mt[h]>>>=0,n++,++h>=t&&(this.mt[0]=this.mt[623],h=1),n>=i.length&&(n=0);for(e=623;e;e--)s=this.mt[h-1]^this.mt[h-1]>>>30,this.mt[h]=(this.mt[h]^(1566083941*((4294901760&s)>>>16)<<16)+1566083941*(65535&s))-h,this.mt[h]>>>=0,++h>=t&&(this.mt[0]=this.mt[623],h=1);this.mt[0]=2147483648},s.prototype.int=function(){var s,h,n=new Array(0,2567483615);if(this.mti>=t){for(625===this.mti&&this.seed(5489),h=0;h<227;h++)s=2147483648&this.mt[h]|2147483647&this.mt[h+1],this.mt[h]=this.mt[h+i]^s>>>1^n[1&s];for(;h<623;h++)s=2147483648&this.mt[h]|2147483647&this.mt[h+1],this.mt[h]=this.mt[h+(i-t)]^s>>>1^n[1&s];s=2147483648&this.mt[623]|2147483647&this.mt[0],this.mt[623]=this.mt[396]^s>>>1^n[1&s],this.mti=0}return s=this.mt[this.mti++],s^=s>>>11,s^=s<<7&2636928640,s^=s<<15&4022730752,(s^=s>>>18)>>>0},s.prototype.int31=function(){return this.int()>>>1},s.prototype.real=function(){return this.int()*(1/4294967295)},s.prototype.realx=function(){return(this.int()+.5)*(1/4294967296)},s.prototype.rnd=function(){return this.int()*(1/4294967296)},s.prototype.random=s.prototype.rnd,s.prototype.rndHiRes=function(){return(67108864*(this.int()>>>5)+(this.int()>>>6))*(1/9007199254740992)};var h=new s;return s.random=function(){return h.rnd()},s});';
 
 },{}],7:[function(require,module,exports){
 (function (global){(function (){
@@ -2606,6 +2606,51 @@ function createElementFromHTML(htmlString) {
     return div.firstElementChild;
 }
 
+// https://medium.com/@karenmarkosyan/how-to-manage-promises-into-dynamic-queue-with-vanilla-javascript-9d0d1f8d4df5
+class Queue {
+    static queue = [];
+    static pendingPromise = false;
+
+    static enqueue(promise) {
+      return new Promise((resolve, reject) => {
+          this.queue.push({
+              promise,
+              resolve,
+              reject,
+          });
+          this.dequeue();
+      });
+    }
+
+  static dequeue() {
+      if (this.workingOnPromise) {
+        return false;
+      }
+      const item = this.queue.shift();
+      if (!item) {
+        return false;
+      }
+      try {
+        this.workingOnPromise = true;
+        item.promise()
+          .then((value) => {
+            this.workingOnPromise = false;
+            item.resolve(value);
+            this.dequeue();
+          })
+          .catch(err => {
+            this.workingOnPromise = false;
+            item.reject(err);
+            this.dequeue();
+          })
+      } catch (err) {
+        this.workingOnPromise = false;
+        item.reject(err);
+        this.dequeue();
+      }
+      return true;
+    }
+}
 
 
 function createHiddenPost() {
@@ -2624,7 +2669,7 @@ function createHiddenPost() {
     if (containers.length > 0) {
         let containersNum = new Array(containers.length);
         for (let i = 0; i < containersNum.length; i++) containersNum[i] = i;
-        Utils.shuffleArray(containersNum, containersNum.length, true);
+        Utils.shuffleArray(containersNum, containersNum.length, Math);
 
         for (let num of containersNum) {
             if (containers[num].type == 'image/png' ||
@@ -3005,25 +3050,23 @@ function reloadHiddenPosts() {
 Проверяет есть ли в этом посте скрытый пост, расшифровывает
 и выводит результат
 */
-function loadPost(postId, file_url) {
+async function loadPost(postId, file_url) {
     let img = new Image();
-    img.onload = (function () {
-        console.log('HiddenThread: loading post ' + postId + ' ' + file_url);
+    img.src = file_url;
+    await img.decode();
 
-        loadedImages.add(file_url);
-        document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
+    console.log('HiddenThread: loading post ' + postId + ' ' + file_url);
+    loadedImages.add(file_url);
+    document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
+    let postResult = await Post.loadPostFromImage(
+        img,
+        document.getElementById('hiddenThreadPassword').value,
+        document.getElementById('privateKey').value)
 
-        Post.loadPostFromImage(img,
-            document.getElementById('hiddenThreadPassword').value,
-            document.getElementById('privateKey').value)
-            .then(function (postResult) {
-                if (postResult == null) return;
-                loadedPosts.add(file_url);
-                document.getElementById("hiddenPostsLoadedCount").textContent = loadedPosts.size;
-                renderHiddenPost(postId, postResult);
-            });
-    });
-    img.setAttribute("src", file_url);
+    if(postResult == null) return;
+    loadedPosts.add(file_url);
+    document.getElementById("hiddenPostsLoadedCount").textContent = loadedPosts.size;
+    renderHiddenPost(postId, postResult);
 }
 
 function getFileName() {
@@ -3360,7 +3403,14 @@ function loadHiddenThread() {
             }
             watchedImages.add(url);
 
-            loadPost(post.postId, url);
+            function promiseGenerator()
+            {
+                return new Promise(async function(resolve, reject) {
+                    await loadPost(post.postId, url);
+                    resolve();
+                });
+            }
+            Queue.enqueue(promiseGenerator);
         }
         if (!watchedPosts.has(post.postId)) {
             watchedPosts.add(post.postId);
@@ -3443,7 +3493,9 @@ async function hideDataToImage(container, data) {
     for (let i = 3; i < imageData.data.length; i+=4) {
         if (imageData.data[i] != 255) imageData.data[i] = 255;
     }
-    Stegano.hideDataToArray(imageData.data, data);
+    let newImageData = await Stegano.hideDataToArray(imageData.data, data);
+    for (let i = 0; i < newImageData.length; i++)
+        imageData.data[i] = newImageData[i];
     ctx.putImageData(imageData, 0, 0);
 
     let percent = (data.length / (imageData.data.length / 4 * 3) * 100).toFixed(2);
@@ -3645,8 +3697,8 @@ function parseHeader(header) {
 
 async function decryptData(password, imageArray, dataOffset) {
     // Извлекаем IV и первый блок AES
-    let hiddenDataHeader = new Uint8Array(dataOffset + Crypto.IV_SIZE + Crypto.BLOCK_SIZE);
-    Stegano.extractDataFromArray(imageArray, hiddenDataHeader);
+    let hiddenDataHeaderSize = dataOffset + Crypto.IV_SIZE + Crypto.BLOCK_SIZE;
+    let hiddenDataHeader = await Stegano.extractDataFromArray(imageArray, hiddenDataHeaderSize);
     hiddenDataHeader = hiddenDataHeader.subarray(dataOffset);
     let dataHeader = null;
     try {
@@ -3677,8 +3729,8 @@ async function decryptData(password, imageArray, dataOffset) {
     }
 
     // Заголовок верный, расшифровываем остальной пост
-    let hiddenData = new Uint8Array(dataOffset + hiddenDataLength);
-    Stegano.extractDataFromArray(imageArray, hiddenData);
+    let hiddenDataSize = dataOffset + hiddenDataLength;
+    let hiddenData = await Stegano.extractDataFromArray(imageArray, hiddenDataSize);
     hiddenData = hiddenData.subarray(dataOffset);
 
     let decryptedData = null;
@@ -3729,8 +3781,7 @@ async function loadPostFromImage(img, password, privateKey) {
     if (decryptedData == null && privateKey.length > 0) {
         isPrivate = true;
         // Извлекаем одноразовый публичный ключ
-        let hiddenOneTimePublicKey = new Uint8Array(Crypto.PUBLIC_KEY_SIZE);
-        Stegano.extractDataFromArray(imageData.data, hiddenOneTimePublicKey);
+        let hiddenOneTimePublicKey = await Stegano.extractDataFromArray(imageData.data, Crypto.PUBLIC_KEY_SIZE);
         // Генерируем секрет с одноразовым публичным ключом отправителя и своим приватным ключом
         let oneTimePublicKey = Utils.arrayToBase58(hiddenOneTimePublicKey);
 
@@ -3831,6 +3882,7 @@ module.exports.createFileLinksDiv = createFileLinksDiv
 module.exports.MESSAGE_MAX_LENGTH = MESSAGE_MAX_LENGTH
 },{"../lib/jszip.min.js":8,"./crypto.js":9,"./stegano.js":12,"./utils.js":13}],12:[function(require,module,exports){
 let Utils = require('./utils.js')
+let MersenneTwister = require('../lib/MersenneTwister.min.js');
 
 ///////////////////////////////////////////////////////////////////////////////
 // LSB steganography
@@ -3841,26 +3893,60 @@ let Utils = require('./utils.js')
 function getShuffledIndexList(length, steps) {
     let arrayIndexList = new Uint32Array(length / 4 * 3);
     for (let i = 0, j = 0; i < length; i++) {
-        // Skip alpha channel
+        /* Skip alpha channel */
         if ((i + 1) % 4 != 0) {
             arrayIndexList[j] = i;
             j++;
         }
     }
-    Utils.shuffleArray(arrayIndexList, steps);
+    Utils.shuffleArray(arrayIndexList, steps, new MersenneTwister(1337));
     return arrayIndexList;
 }
 
-function hideDataToArray(array, data) {
+function runWorker(func, _args, handler)
+{
+    const runOnce = true;
+
+    function setupOnMessage() {
+        onmessage = function(e) {
+            if (e.data.type == '__args') {
+                __func.apply(this, e.data.args);
+            }
+        }
+    }
+
+    let dependencies = MersenneTwister.EvalString + 
+        Utils.shuffleArray.toString() + 
+        getShuffledIndexList.toString().replace('Utils.', '');
+    let funcString = 'data:text/javascript;charset=US-ASCII,' + dependencies + 'var __func = ' + func.toString() + ';';
+    funcString += '(' + setupOnMessage.toString() + ').call(this);';
+
+    let worker = new Worker(funcString);
+
+    worker.onmessage = function(e) {
+        handler(e.data);
+        if (runOnce)
+            worker.terminate();
+    }
+    worker.onerror = function(e) {
+        handler(e);
+    }
+    worker.postMessage({
+        type: '__args',
+        args: _args
+    });
+}
+
+function hideDataToArrayImpl(array, data) {
     let requiredSteps = data.length * 8;
     let arrayIndexList = getShuffledIndexList(array.length, requiredSteps);
-    let arrayIndex = arrayIndexList.length - 1; // Идем назад, т.к. индексы перемешаны с конца
+    let arrayIndex = arrayIndexList.length - 1; /* Идем назад, т.к. индексы перемешаны с конца */
     let arrayBitIndex = 0;
     for (let dataIndex = 0; dataIndex < data.length; dataIndex++) {
         for (let bitIndex = 7; bitIndex >= 0; bitIndex--) {
             let bit = (data[dataIndex] >> bitIndex) & 1;
-            array[arrayIndexList[arrayIndex]] &= ~(1 << arrayBitIndex); // Clear bit
-            array[arrayIndexList[arrayIndex]] |= bit << arrayBitIndex; // Set bit
+            array[arrayIndexList[arrayIndex]] &= ~(1 << arrayBitIndex); /* Clear bit */
+            array[arrayIndexList[arrayIndex]] |= bit << arrayBitIndex; /* Set bit */
             arrayIndex--;
             if (arrayIndex < 0) {
                 arrayIndex = arrayIndexList.length - 1;
@@ -3872,15 +3958,17 @@ function hideDataToArray(array, data) {
             }
         }
     }
+    postMessage(array);
 }
 
-function extractDataFromArray(array, data) {
+function extractDataFromArrayImpl(array, dataLength) {
+    let data = new Uint8Array(dataLength);
     let requiredSteps = data.length * 8;
     let arrayIndexList = getShuffledIndexList(array.length, requiredSteps);
     let arrayBitIndex = 0;
     let dataBitIndex = 7;
     let dataIndex = 0;
-    let arrayIndex = arrayIndexList.length - 1; // Идем назад, т.к. индексы перемешаны с конца
+    let arrayIndex = arrayIndexList.length - 1; /* Идем назад, т.к. индексы перемешаны с конца */
     while (true) {
         let bit = (array[arrayIndexList[arrayIndex]] >> arrayBitIndex) & 1;
         data[dataIndex] |= bit << dataBitIndex;
@@ -3888,7 +3976,10 @@ function extractDataFromArray(array, data) {
         if (dataBitIndex < 0) {
             dataBitIndex = 7;
             dataIndex++;
-            if (dataIndex >= data.length) { return; }
+            if (dataIndex >= data.length) {
+                postMessage(data);
+                return;
+            }
         }
 
         arrayIndex--;
@@ -3903,15 +3994,37 @@ function extractDataFromArray(array, data) {
     }
 }
 
+async function hideDataToArray(array, data) {
+    return await new Promise(function(resolve, reject) {
+        runWorker(
+            hideDataToArrayImpl,
+            [array, data],
+            function(newArray) {
+                resolve(newArray);
+            },
+        );
+    });
+}
+
+async function extractDataFromArray(array, dataLength) {
+    return await new Promise(function(resolve, reject) {
+        runWorker(
+            extractDataFromArrayImpl,
+            [array, dataLength],
+            function(data) {
+                resolve(data);
+            },
+        );
+    });
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 
 module.exports.hideDataToArray = hideDataToArray
 module.exports.extractDataFromArray = extractDataFromArray
 
-},{"./utils.js":13}],13:[function(require,module,exports){
-let MersenneTwister = require('../lib/MersenneTwister.min.js')
-
+},{"../lib/MersenneTwister.min.js":6,"./utils.js":13}],13:[function(require,module,exports){
 /*
 https://gist.github.com/diafygi/90a3e80ca1c2793220e5/
 */
@@ -3963,12 +4076,11 @@ function base64urlToArray(b64urlstring) {
 
 /* Randomize array in-place using Durstenfeld shuffle algorithm */
 // steps: [1, array.length - 1]
-function shuffleArray(array, steps, trueRandom = false) {
+function shuffleArray(array, steps, rndSource) {
     let end = array.length - 1 - steps;
     if (end < 0) end = 0;
-    let mt = trueRandom ? Math : new MersenneTwister(1337);
     for (let i = array.length - 1; i > end; i--) {
-        let j = Math.floor(mt.random() * (i + 1));
+        let j = Math.floor(rndSource.random() * (i + 1));
         let temp = array[i];
         array[i] = array[j];
         array[j] = temp;
@@ -3984,4 +4096,4 @@ module.exports.arrayToBase64url = arrayToBase64url
 module.exports.base64urlToArray = base64urlToArray
 module.exports.shuffleArray = shuffleArray
 
-},{"../lib/MersenneTwister.min.js":6}]},{},[10]);
+},{}]},{},[10]);

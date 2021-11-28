@@ -30,6 +30,51 @@ function createElementFromHTML(htmlString) {
     return div.firstElementChild;
 }
 
+// https://medium.com/@karenmarkosyan/how-to-manage-promises-into-dynamic-queue-with-vanilla-javascript-9d0d1f8d4df5
+class Queue {
+    static queue = [];
+    static pendingPromise = false;
+
+    static enqueue(promise) {
+      return new Promise((resolve, reject) => {
+          this.queue.push({
+              promise,
+              resolve,
+              reject,
+          });
+          this.dequeue();
+      });
+    }
+
+  static dequeue() {
+      if (this.workingOnPromise) {
+        return false;
+      }
+      const item = this.queue.shift();
+      if (!item) {
+        return false;
+      }
+      try {
+        this.workingOnPromise = true;
+        item.promise()
+          .then((value) => {
+            this.workingOnPromise = false;
+            item.resolve(value);
+            this.dequeue();
+          })
+          .catch(err => {
+            this.workingOnPromise = false;
+            item.reject(err);
+            this.dequeue();
+          })
+      } catch (err) {
+        this.workingOnPromise = false;
+        item.reject(err);
+        this.dequeue();
+      }
+      return true;
+    }
+}
 
 
 function createHiddenPost() {
@@ -48,7 +93,7 @@ function createHiddenPost() {
     if (containers.length > 0) {
         let containersNum = new Array(containers.length);
         for (let i = 0; i < containersNum.length; i++) containersNum[i] = i;
-        Utils.shuffleArray(containersNum, containersNum.length, true);
+        Utils.shuffleArray(containersNum, containersNum.length, Math);
 
         for (let num of containersNum) {
             if (containers[num].type == 'image/png' ||
@@ -429,25 +474,23 @@ function reloadHiddenPosts() {
 Проверяет есть ли в этом посте скрытый пост, расшифровывает
 и выводит результат
 */
-function loadPost(postId, file_url) {
+async function loadPost(postId, file_url) {
     let img = new Image();
-    img.onload = (function () {
-        console.log('HiddenThread: loading post ' + postId + ' ' + file_url);
+    img.src = file_url;
+    await img.decode();
 
-        loadedImages.add(file_url);
-        document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
+    console.log('HiddenThread: loading post ' + postId + ' ' + file_url);
+    loadedImages.add(file_url);
+    document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
+    let postResult = await Post.loadPostFromImage(
+        img,
+        document.getElementById('hiddenThreadPassword').value,
+        document.getElementById('privateKey').value)
 
-        Post.loadPostFromImage(img,
-            document.getElementById('hiddenThreadPassword').value,
-            document.getElementById('privateKey').value)
-            .then(function (postResult) {
-                if (postResult == null) return;
-                loadedPosts.add(file_url);
-                document.getElementById("hiddenPostsLoadedCount").textContent = loadedPosts.size;
-                renderHiddenPost(postId, postResult);
-            });
-    });
-    img.setAttribute("src", file_url);
+    if(postResult == null) return;
+    loadedPosts.add(file_url);
+    document.getElementById("hiddenPostsLoadedCount").textContent = loadedPosts.size;
+    renderHiddenPost(postId, postResult);
 }
 
 function getFileName() {
@@ -784,7 +827,14 @@ function loadHiddenThread() {
             }
             watchedImages.add(url);
 
-            loadPost(post.postId, url);
+            function promiseGenerator()
+            {
+                return new Promise(async function(resolve, reject) {
+                    await loadPost(post.postId, url);
+                    resolve();
+                });
+            }
+            Queue.enqueue(promiseGenerator);
         }
         if (!watchedPosts.has(post.postId)) {
             watchedPosts.add(post.postId);

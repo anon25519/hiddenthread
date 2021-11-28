@@ -27,7 +27,7 @@ function createHiddenPost() {
     if (containers.length > 0) {
         let containersNum = new Array(containers.length);
         for (let i = 0; i < containersNum.length; i++) containersNum[i] = i;
-        Utils.shuffleArray(containersNum, containersNum.length, true);
+        Utils.shuffleArray(containersNum, containersNum.length, Math);
 
         for (let num of containersNum) {
             if (containers[num].type == 'image/png' ||

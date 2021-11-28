@@ -43,7 +43,9 @@ async function hideDataToImage(container, data) {
     for (let i = 3; i < imageData.data.length; i+=4) {
         if (imageData.data[i] != 255) imageData.data[i] = 255;
     }
-    Stegano.hideDataToArray(imageData.data, data);
+    let newImageData = await Stegano.hideDataToArray(imageData.data, data);
+    for (let i = 0; i < newImageData.length; i++)
+        imageData.data[i] = newImageData[i];
     ctx.putImageData(imageData, 0, 0);
 
     let percent = (data.length / (imageData.data.length / 4 * 3) * 100).toFixed(2);
@@ -245,8 +247,8 @@ function parseHeader(header) {
 
 async function decryptData(password, imageArray, dataOffset) {
     // Извлекаем IV и первый блок AES
-    let hiddenDataHeader = new Uint8Array(dataOffset + Crypto.IV_SIZE + Crypto.BLOCK_SIZE);
-    Stegano.extractDataFromArray(imageArray, hiddenDataHeader);
+    let hiddenDataHeaderSize = dataOffset + Crypto.IV_SIZE + Crypto.BLOCK_SIZE;
+    let hiddenDataHeader = await Stegano.extractDataFromArray(imageArray, hiddenDataHeaderSize);
     hiddenDataHeader = hiddenDataHeader.subarray(dataOffset);
     let dataHeader = null;
     try {
@@ -277,8 +279,8 @@ async function decryptData(password, imageArray, dataOffset) {
     }
 
     // Заголовок верный, расшифровываем остальной пост
-    let hiddenData = new Uint8Array(dataOffset + hiddenDataLength);
-    Stegano.extractDataFromArray(imageArray, hiddenData);
+    let hiddenDataSize = dataOffset + hiddenDataLength;
+    let hiddenData = await Stegano.extractDataFromArray(imageArray, hiddenDataSize);
     hiddenData = hiddenData.subarray(dataOffset);
 
     let decryptedData = null;
@@ -329,8 +331,7 @@ async function loadPostFromImage(img, password, privateKey) {
     if (decryptedData == null && privateKey.length > 0) {
         isPrivate = true;
         // Извлекаем одноразовый публичный ключ
-        let hiddenOneTimePublicKey = new Uint8Array(Crypto.PUBLIC_KEY_SIZE);
-        Stegano.extractDataFromArray(imageData.data, hiddenOneTimePublicKey);
+        let hiddenOneTimePublicKey = await Stegano.extractDataFromArray(imageData.data, Crypto.PUBLIC_KEY_SIZE);
         // Генерируем секрет с одноразовым публичным ключом отправителя и своим приватным ключом
         let oneTimePublicKey = Utils.arrayToBase58(hiddenOneTimePublicKey);
 

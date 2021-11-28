@@ -1,5 +1,3 @@
-let MersenneTwister = require('../lib/MersenneTwister.min.js')
-
 /*
 https://gist.github.com/diafygi/90a3e80ca1c2793220e5/
 */
@@ -51,12 +49,11 @@ function base64urlToArray(b64urlstring) {
 
 /* Randomize array in-place using Durstenfeld shuffle algorithm */
 // steps: [1, array.length - 1]
-function shuffleArray(array, steps, trueRandom = false) {
+function shuffleArray(array, steps, rndSource) {
     let end = array.length - 1 - steps;
     if (end < 0) end = 0;
-    let mt = trueRandom ? Math : new MersenneTwister(1337);
     for (let i = array.length - 1; i > end; i--) {
-        let j = Math.floor(mt.random() * (i + 1));
+        let j = Math.floor(rndSource.random() * (i + 1));
         let temp = array[i];
         array[i] = array[j];
         array[j] = temp;
