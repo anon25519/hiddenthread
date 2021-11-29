@@ -184,7 +184,7 @@ function createHiddenPost() {
             alert('Спрятано ' + imageResult.len + ' байт (занято ' + imageResult.percent + '% изображения)');
         })
         .catch(function (e) {
-            console.log('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
+            Utils.trace('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
             alert('Ошибка при создании скрытопоста: ' + e);
         });
 }
@@ -294,8 +294,8 @@ function getClosingTagIndex(text, i, tag) {
 
 // Добавление HTML скрытопоста к основному посту
 function addHiddenPostToHtml(postId, postResult) {
-    console.log(`HiddenThread: Post ${postId} is hidden, its object:`);
-    console.log(postResult);
+    Utils.trace(`HiddenThread: Post ${postId} is hidden, its object:`);
+    Utils.trace(postResult);
 
     let clearPost = document.getElementById('post-' + postId);
     let postBodyDiv = document.createElement('div');
@@ -479,7 +479,7 @@ async function loadPost(postId, file_url) {
     img.src = file_url;
     await img.decode();
 
-    console.log('HiddenThread: loading post ' + postId + ' ' + file_url);
+    Utils.trace('HiddenThread: loading post ' + postId + ' ' + file_url);
     loadedImages.add(file_url);
     document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
     let postResult = await Post.loadPostFromImage(
@@ -508,7 +508,7 @@ function CheckVersion() {
     request.open("GET", VERSION_SOURCE);
     request.onreadystatechange = function () {
         if (request.readyState === 4 && request.status === 200) {
-            console.log(`Актуальная версия HiddenThread: ${request.responseText}`);
+            Utils.trace(`Актуальная версия HiddenThread: ${request.responseText}`);
             let infoDiv = document.getElementById('versionInfo');
             infoDiv.innerHTML = '';
             let info = document.createElement('span');
@@ -528,7 +528,7 @@ function CheckVersion() {
 
 function createInterface() {
     let toggleText = () => {
-        return storage.hide
+        return storage.hidePostForm
             ? "Открыть"
             : "Закрыть"
     }
@@ -540,7 +540,7 @@ function createInterface() {
                 <p style="font-size:x-large;">Скрытотред ${CURRENT_VERSION}</p>
                 <span id="hiddenThreadToggle" style="position: absolute; right: 0; cursor: pointer">${toggleText()}</span>
             </div>
-            <div id="hiddenThreadForm" style="display: ${storage.hide ? 'none' : ''}">
+            <div id="hiddenThreadForm" style="display: ${storage.hidePostForm ? 'none' : ''}">
                 <div style="padding:5px;">
                     <span style="padding-right: 5px;">Пароль:</span>
                     <input placeholder="Без пароля" id="hiddenThreadPassword" />
@@ -640,13 +640,42 @@ function createInterface() {
     // render
     document.getElementById('postform').insertAdjacentHTML(isDollchan() ? 'afterend' : 'beforeend', formTemplate);
 
+    // Меню
     document.getElementsByClassName('adminbar__boards')[0].insertAdjacentHTML(
         'beforeend', `
         <span>&nbsp;&nbsp;&nbsp;&nbsp;HiddenThread:
         <a id="hideNormalPosts" href="#">Свернуть/развернуть все обычные посты</a>
         | <a id="hiddenThreadSettings" href="#">Настройки</a>
+        <div id="hiddenThreadSettingsWindow" style="display: none; border: solid 1px black; padding: 2px; text-align: left; min-width: 370px; max-width: fit-content; margin: auto;">
+            <div>Настройки</div>
+            <hr>
+            <div>
+                <div><input id="htIsDebugLogEnabled" type="checkbox"> <span>Включить debug-лог</span></div>
+                <div><input id="htIsQueueLoadEnabled" type="checkbox"> <span>Включить последовательную загрузку скрытопостов</span></div>
+            </div>
+            <hr>
+            <div>
+                <input type="button" class="button" id="hiddenThreadSettingsSave" value="Сохранить">
+                <input type="button" class="button" id="hiddenThreadSettingsCancel" value="Отмена">
+                <br><i>Для применения обновите страницу</i>
+            </div>
+        </div>
         </span>`);
-
+    let hiddenThreadSettingsLink = document.getElementById('hiddenThreadSettings');
+    hiddenThreadSettingsLink.onclick = function() {
+        let settingsWindow = document.getElementById('hiddenThreadSettingsWindow');
+        document.getElementById("htIsDebugLogEnabled").checked = storage.isDebugLogEnabled;
+        document.getElementById("htIsQueueLoadEnabled").checked = storage.isQueueLoadEnabled;
+        settingsWindow.style.display = settingsWindow.style.display == 'none' ? 'block' : 'none';
+    }
+    document.getElementById("hiddenThreadSettingsCancel").onclick = function() {
+        document.getElementById('hiddenThreadSettingsWindow').style.display = 'none';
+    }
+    document.getElementById("hiddenThreadSettingsSave").onclick = function() {
+        setStorage({ isDebugLogEnabled: document.getElementById("htIsDebugLogEnabled").checked });
+        setStorage({ isQueueLoadEnabled: document.getElementById("htIsQueueLoadEnabled").checked });
+        document.getElementById('hiddenThreadSettingsWindow').style.display = 'none';
+    }
 
     // listeners
     let enlargeCheck = document.getElementById('isDataRatioLimited')
@@ -663,10 +692,10 @@ function createInterface() {
 
     let toggleEl = document.getElementById("hiddenThreadToggle")
     toggleEl.onclick = () => {
-        setStorage({ hide: !storage.hide })
+        setStorage({ hidePostForm: !storage.hidePostForm })
         toggleEl.textContent = toggleText()
         let formEl = document.getElementById("hiddenThreadForm")
-        formEl.style.display = storage.hide
+        formEl.style.display = storage.hidePostForm
             ? "none"
             : ""
     }
@@ -832,18 +861,22 @@ function loadHiddenThread() {
             watchedImages.add(url);
 
             function promiseGenerator() {
-                new Promise(async function(resolve, reject) {
+                return new Promise(async function(resolve, reject) {
                     try {
                         await loadPost(post.postId, url);
                     }
                     catch(e) {
-                        console.log('HiddenThread: Ошибка при загрузке поста: ' + e + ' stack:\n' + e.stack);
+                        Utils.trace('HiddenThread: Ошибка при загрузке поста: ' + e + ' stack:\n' + e.stack);
                     }
                     resolve();
                 });
             }
-            promiseGenerator();
-            // Queue.enqueue(promiseGenerator);
+
+            if(storage.isQueueLoadEnabled) {
+                Queue.enqueue(promiseGenerator);
+            } else {
+                promiseGenerator();
+            }
         }
         if (!watchedPosts.has(post.postId)) {
             watchedPosts.add(post.postId);
@@ -874,6 +907,9 @@ function isMakaba() {
 
 // Работаем только на главной и в тредах
 if (!isMakaba()) return;
+
+if (!storage.isDebugLogEnabled)
+    Utils.trace = function() {}
 
 createInterface();
 CheckVersion();

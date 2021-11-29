@@ -2671,8 +2671,9 @@ async function packPost(message, files, privateKey) {
 
         let signatureArray = await Crypto.sign(privateKey, data);
         if (signatureArray.length != Crypto.SIGNATURE_SIZE || publicKeyArray.length != Crypto.PUBLIC_KEY_SIZE) {
-            console.log(signatureArray);
-            console.log(publicKeyArray);
+            Utils.trace('HiddenThread: signature and publicKey:');
+            Utils.trace(signatureArray);
+            Utils.trace(publicKeyArray);
             throw new Error("signatureArray or publicKeyArray size incorrect");
         }
         data.set(signatureArray, Crypto.BLOCK_SIZE + Crypto.PUBLIC_KEY_SIZE);
@@ -2766,7 +2767,7 @@ async function unzipPostData(zipData) {
         }
     }
     catch (e) {
-        console.log('HiddenThread: Ошибка при распаковке архива: ' + e);
+        Utils.trace('HiddenThread: Ошибка при распаковке архива: ' + e);
         unpackResult = 'Не удалось распаковать весь пост, контейнер поврежден';
     }
 
@@ -2792,7 +2793,7 @@ async function verifyPostData(data) {
         isVerified = await Crypto.verify(keySigPair[0], keySigPair[1], data);
     }
     catch (e) {
-        console.log('HiddenThread: Ошибка при проверке подписи: ' + e + ' stack:\n' + e.stack);
+        Utils.trace('HiddenThread: Ошибка при проверке подписи: ' + e + ' stack:\n' + e.stack);
     }
     let verifyResult = {
         'publicKey': Utils.arrayToBase58(keySigPair[0]),
@@ -2822,26 +2823,26 @@ async function decryptData(password, imageArray, dataOffset) {
         dataHeader = await Crypto.decrypt(password, hiddenDataHeader, true);
     }
     catch (e) {
-        //console.log('Не удалось расшифровать заголовок, либо неверный пароль, либо это не скрытопост: ' + e);
+        // Не удалось расшифровать заголовок, либо неверный пароль, либо это не скрытопост
         return null;
     }
 
     let header = parseHeader(dataHeader);
     if (header.magic != 'ht') {
-        console.log('HiddenThread: Неверная сигнатура: ' + header.magic);
+        Utils.trace('HiddenThread: Неверная сигнатура: ' + header.magic);
         return null;
     }
 
-    console.log('HiddenThread: version ' + header.version);
-    console.log('HiddenThread: blocksCount ' + header.blocksCount);
-    console.log('HiddenThread: timestamp ' + header.timestamp);
-    console.log('HiddenThread: type ' + header.type);
+    Utils.trace('HiddenThread: version ' + header.version);
+    Utils.trace('HiddenThread: blocksCount ' + header.blocksCount);
+    Utils.trace('HiddenThread: timestamp ' + header.timestamp);
+    Utils.trace('HiddenThread: type ' + header.type);
 
     let maxHiddenDataLength = imageArray.length / 4 * 3;
     let hiddenDataLength = Crypto.IV_SIZE + header.blocksCount * Crypto.BLOCK_SIZE;
-    console.log('HiddenThread: hiddenDataLength (+IV) ' + hiddenDataLength);
+    Utils.trace('HiddenThread: hiddenDataLength (+IV) ' + hiddenDataLength);
     if (hiddenDataLength > maxHiddenDataLength) {
-        console.log('HiddenThread: blocksCount * Crypto.BLOCK_SIZE: ' + (header.blocksCount * Crypto.BLOCK_SIZE) + ' > maxHiddenDataLength: ' + maxHiddenDataLength);
+        Utils.trace('HiddenThread: blocksCount * Crypto.BLOCK_SIZE: ' + (header.blocksCount * Crypto.BLOCK_SIZE) + ' > maxHiddenDataLength: ' + maxHiddenDataLength);
         return null;
     }
 
@@ -2855,7 +2856,7 @@ async function decryptData(password, imageArray, dataOffset) {
         decryptedData = await Crypto.decrypt(password, hiddenData);
     }
     catch (e) {
-        //console.log('HiddenThread: Не удалось расшифровать данные: ' + e);
+        Utils.trace('HiddenThread: Не удалось расшифровать данные: ' + e);
         return null;
     }
     return {
@@ -2907,7 +2908,7 @@ async function loadPostFromImage(img, password, privateKey) {
             secretPassword = await Crypto.deriveSecretKey(privateKey, oneTimePublicKey);
         }
         catch (e) {
-            // console.log('HiddenThread: Не удалось сгенерировать секрет: ' + e);
+            // Не удалось сгенерировать секрет, либо неверный ключ, либо это не скрытопост
         }
 
         if (secretPassword != null) {
@@ -3088,7 +3089,7 @@ function createHiddenPost() {
             alert('Спрятано ' + imageResult.len + ' байт (занято ' + imageResult.percent + '% изображения)');
         })
         .catch(function (e) {
-            console.log('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
+            Utils.trace('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
             alert('Ошибка при создании скрытопоста: ' + e);
         });
 }
@@ -3109,8 +3110,8 @@ function convertToHtml(text) {
 }
 
 function renderHiddenPost(postResult) {
-    console.log(`HiddenThread: Post is hidden, its object:`);
-    console.log(postResult);
+    Utils.trace(`HiddenThread: Post is hidden, its object:`);
+    Utils.trace(postResult);
 
     let clearPost = document.getElementById('decodedPost');
     clearPost.innerHTML = '';
@@ -3184,7 +3185,7 @@ function loadPost() {
                 document.getElementById('hiddenThreadPasswordDecode').value,
                 document.getElementById('privateKeyDecode').value)
                 .then(function (postResult) {
-                    console.log(postResult);
+                    Utils.trace(postResult);
                     if (postResult == null)
                     {
                         alert('Не удалось декодировать скрытопост - неверный пароль или ключ, либо это обычная картинка')
@@ -3220,11 +3221,15 @@ function createInterface() {
         createHiddenPost();
     }
     document.getElementById('generateKeyPairButton').onclick = function () {
-        Crypto.generateKeyPair()
-            .then(function (pair) {
-                document.getElementById('privateKey').value = pair[0];
-                document.getElementById('publicKey').value = pair[1];
-            });
+        if (!document.getElementById('privateKey').value ||
+            confirm('Сгенерировать новую пару ключей? Предыдущая пара будет стерта!'))
+        {
+            Crypto.generateKeyPair()
+                .then(function(pair) {
+                    document.getElementById('privateKey').value = pair[0];
+                    document.getElementById('publicKey').value = pair[1];
+                });
+        }
     }
     document.getElementById('privateKey').oninput = function () {
         let privateKey = document.getElementById('privateKey').value;
@@ -3452,6 +3457,9 @@ function shuffleArray(array, steps, rndSource) {
     }
 }
 
+function trace(s) {
+    console.log(s);
+}
 
 
 module.exports.arrayToBase58 = arrayToBase58
@@ -3460,5 +3468,6 @@ module.exports.arrayToBase64 = arrayToBase64
 module.exports.arrayToBase64url = arrayToBase64url
 module.exports.base64urlToArray = base64urlToArray
 module.exports.shuffleArray = shuffleArray
+module.exports.trace = trace
 
 },{}]},{},[11]);

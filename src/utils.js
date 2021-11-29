@@ -60,6 +60,9 @@ function shuffleArray(array, steps, rndSource) {
     }
 }
 
+function trace(s) {
+    console.log(s);
+}
 
 
 module.exports.arrayToBase58 = arrayToBase58
@@ -68,3 +71,4 @@ module.exports.arrayToBase64 = arrayToBase64
 module.exports.arrayToBase64url = arrayToBase64url
 module.exports.base64urlToArray = base64urlToArray
 module.exports.shuffleArray = shuffleArray
+module.exports.trace = trace

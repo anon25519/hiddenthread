@@ -88,7 +88,7 @@ function createHiddenPost() {
             alert('Спрятано ' + imageResult.len + ' байт (занято ' + imageResult.percent + '% изображения)');
         })
         .catch(function (e) {
-            console.log('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
+            Utils.trace('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
             alert('Ошибка при создании скрытопоста: ' + e);
         });
 }
@@ -109,8 +109,8 @@ function convertToHtml(text) {
 }
 
 function renderHiddenPost(postResult) {
-    console.log(`HiddenThread: Post is hidden, its object:`);
-    console.log(postResult);
+    Utils.trace(`HiddenThread: Post is hidden, its object:`);
+    Utils.trace(postResult);
 
     let clearPost = document.getElementById('decodedPost');
     clearPost.innerHTML = '';
@@ -184,7 +184,7 @@ function loadPost() {
                 document.getElementById('hiddenThreadPasswordDecode').value,
                 document.getElementById('privateKeyDecode').value)
                 .then(function (postResult) {
-                    console.log(postResult);
+                    Utils.trace(postResult);
                     if (postResult == null)
                     {
                         alert('Не удалось декодировать скрытопост - неверный пароль или ключ, либо это обычная картинка')
@@ -220,11 +220,15 @@ function createInterface() {
         createHiddenPost();
     }
     document.getElementById('generateKeyPairButton').onclick = function () {
-        Crypto.generateKeyPair()
-            .then(function (pair) {
-                document.getElementById('privateKey').value = pair[0];
-                document.getElementById('publicKey').value = pair[1];
-            });
+        if (!document.getElementById('privateKey').value ||
+            confirm('Сгенерировать новую пару ключей? Предыдущая пара будет стерта!'))
+        {
+            Crypto.generateKeyPair()
+                .then(function(pair) {
+                    document.getElementById('privateKey').value = pair[0];
+                    document.getElementById('publicKey').value = pair[1];
+                });
+        }
     }
     document.getElementById('privateKey').oninput = function () {
         let privateKey = document.getElementById('privateKey').value;
