@@ -3259,11 +3259,15 @@ function createInterface() {
         createHiddenPost();
     }
     document.getElementById('generateKeyPairButton').onclick = function () {
-        Crypto.generateKeyPair()
-            .then(function (pair) {
-                document.getElementById('privateKey').value = pair[0];
-                document.getElementById('publicKey').value = pair[1];
-            });
+        if (!document.getElementById('privateKey').value ||
+            confirm('Сгенерировать новую пару ключей? Предыдущая пара будет стерта!'))
+        {
+            Crypto.generateKeyPair()
+                .then(function(pair) {
+                    document.getElementById('privateKey').value = pair[0];
+                    document.getElementById('publicKey').value = pair[1];
+                });
+        }
     }
     document.getElementById('privateKey').oninput = function () {
         let privateKey = document.getElementById('privateKey').value;
@@ -3403,14 +3407,19 @@ function loadHiddenThread() {
             }
             watchedImages.add(url);
 
-            function promiseGenerator()
-            {
-                return new Promise(async function(resolve, reject) {
-                    await loadPost(post.postId, url);
+            function promiseGenerator() {
+                new Promise(async function(resolve, reject) {
+                    try {
+                        await loadPost(post.postId, url);
+                    }
+                    catch(e) {
+                        console.log('HiddenThread: Ошибка при загрузке поста: ' + e + ' stack:\n' + e.stack);
+                    }
                     resolve();
                 });
             }
-            Queue.enqueue(promiseGenerator);
+            promiseGenerator();
+            // Queue.enqueue(promiseGenerator);
         }
         if (!watchedPosts.has(post.postId)) {
             watchedPosts.add(post.postId);
