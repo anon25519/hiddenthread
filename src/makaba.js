@@ -330,8 +330,8 @@ function addHiddenPostToHtml(postId, postResult) {
     if (postResult.verifyResult != null) {
         let postArticleSign = document.createElement('div');
         postArticleSign.innerHTML =
-            'Публичный ключ: <span ' +
-            (postResult.verifyResult.isVerified ? 'style="color:green;"' : 'style="color:red;"') + '>' +
+            'Публичный ключ: <span style="word-wrap:normal;word-break:normal;color:' +
+            (postResult.verifyResult.isVerified ? 'green' : 'red') + ';">' +
             postResult.verifyResult.publicKey + '</span>' +
             (postResult.verifyResult.isVerified ? '' : ' (неверная подпись!)');
         postMetadata.appendChild(postArticleSign);
