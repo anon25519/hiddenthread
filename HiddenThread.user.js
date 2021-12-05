@@ -3303,7 +3303,7 @@ function renderHiddenPost(postId, loadedPost, unpackedData) {
 function reloadHiddenPosts() {
     // очистить список скаченных и просмотренных изображений
     // чтобы они снова скачались и просканировались
-    loadedImages = new Set();
+    document.getElementById("imagesLoadedCount").textContent = loadedPosts.size;
     watchedImages = new Set();
     loadHiddenThread();
 }
@@ -3315,8 +3315,8 @@ async function loadAndRenderPost(postId, url, password, privateKey) {
     await img.decode();
 
     let imgId = getImgName(url);
-    loadedImages.add(imgId);
-    document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
+    document.getElementById("imagesLoadedCount").textContent =
+        parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
 
     let loadedPost = await Post.loadPostFromImage(img, password, privateKey);
 
@@ -3357,8 +3357,20 @@ async function loadPost(postId, url, password, privateKey, passwordHash, private
         }
         // Если в кэше скрытопост, выводим его
         else if(cachedPost.hiddenPost) {
+            loadedPosts.add(imgId);
+            document.getElementById("hiddenPostsLoadedCount").textContent = loadedPosts.size;
+            document.getElementById("hiddenPostsCachedCount").textContent =
+                parseInt(document.getElementById("hiddenPostsCachedCount").textContent) + 1;
+            document.getElementById("imagesLoadedCount").textContent =
+                parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
+
             let unpackedPost = await Post.unzipPostData(cachedPost.hiddenPost.zipData);
             renderHiddenPost(postId, cachedPost.hiddenPost, unpackedPost);
+        }
+        // В кэше не скрытопост
+        else {
+            document.getElementById("imagesLoadedCount").textContent =
+                parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
         }
     } else {
         // Если в кэше ничего нет, то загружаем пост,
@@ -3429,6 +3441,7 @@ function createInterface() {
                     Загружено картинок: <span id="imagesLoadedCount">0</span>/<span id="imagesCount">0</span>
                     <br>
                     Загружено скрытопостов: <span id="hiddenPostsLoadedCount">0</span>
+                    (из кэша: <span id="hiddenPostsCachedCount">0</span>)
                 </div>
                 <textarea
                     id="hiddenPostInput"
@@ -3762,8 +3775,6 @@ async function getIdbUsageReadable() {
 let watchedPosts = new Set();
 // множество ID просмотренных картинок
 let watchedImages = new Set();
-// множество ID загруженных картинок
-let loadedImages = new Set();
 // множество ID картинок с загруженными скрытопостами
 let loadedPosts = new Set();
 let scanning = false;
@@ -3790,7 +3801,7 @@ async function loadHiddenThread() {
     for (let post of postsToScan) {
         for (let url of post.urls) {
             let imgId = getImgName(url);
-            if (loadedImages.has(imgId) || loadedPosts.has(imgId) || watchedImages.has(imgId)) {
+            if (loadedPosts.has(imgId) || watchedImages.has(imgId)) {
                 continue;
             }
             watchedImages.add(imgId);
@@ -3824,7 +3835,6 @@ async function loadHiddenThread() {
 
     await Promise.all(loadPostPromises);
 
-    document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
     document.getElementById('htCacheSize').textContent = `${await getCacheSizeReadable()} (IDB usage: ${await getIdbUsageReadable()})`;
 
     scanning = false;
