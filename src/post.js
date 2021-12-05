@@ -298,25 +298,7 @@ async function decryptData(password, imageArray, dataOffset) {
     };
 }
 
-/*
-Возвращает объект скрытого поста.
-Объект:
-{
-  "header": {
-    "magic": "ht",
-    "version": 1,
-    "blocksCount": 9,
-    "timestamp": 1623775315,
-    "type": 0
-  },
-  "post": {
-    "message": "test",
-    "files": []
-  },
-  "verifyResult": null,
-  "isPrivate": false
-}
-*/
+// Возвращает объект скрытого поста
 async function loadPostFromImage(img, password, privateKey) {
     let canvas = document.createElement('canvas');
     canvas.width = img.width;
@@ -363,13 +345,15 @@ async function loadPostFromImage(img, password, privateKey) {
         zipOffset = Crypto.BLOCK_SIZE;
     }
 
-    let post = await unzipPostData(decryptedData.data.subarray(zipOffset));
+    let zipDataArray = decryptedData.data.subarray(zipOffset);
+    let zipData = new Blob([zipDataArray], {type: 'application/zip'});
 
     return {
-        'header': decryptedData.header,
-        'post': post,
-        'verifyResult': verifyResult,
-        'isPrivate': isPrivate,
+        timestamp: decryptedData.header.timestamp,
+        publicKey: verifyResult ? verifyResult.publicKey : null,
+        isVerified: verifyResult ? verifyResult.isVerified : null,
+        isPrivate: isPrivate,
+        zipData: zipData,
     };
 }
 
@@ -429,5 +413,6 @@ function createFileLinksDiv(files, hasSkippedFiles, postId) {
 
 module.exports.createHiddenPostImpl = createHiddenPostImpl
 module.exports.loadPostFromImage = loadPostFromImage
+module.exports.unzipPostData = unzipPostData
 module.exports.createFileLinksDiv = createFileLinksDiv
 module.exports.MESSAGE_MAX_LENGTH = MESSAGE_MAX_LENGTH

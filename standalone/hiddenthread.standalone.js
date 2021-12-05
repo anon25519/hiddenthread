@@ -2552,6 +2552,14 @@ async function deriveSecretKey(privateKeyBase58, publicKeyBase58) {
 
 ///////////////////////////////////////////////////////////////////////////////
 
+async function digestMessage(message) {
+    const msgUint8 = new TextEncoder().encode(message);                           // encode as (utf-8) Uint8Array
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);           // hash the message
+    const hashArray = Array.from(new Uint8Array(hashBuffer));                     // convert buffer to byte array
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join(''); // convert bytes to hex string
+    return hashHex;
+}
+
 module.exports.encrypt = encrypt
 module.exports.decrypt = decrypt
 module.exports.importPublicKeyArrayFromPrivateKey = importPublicKeyArrayFromPrivateKey
@@ -2559,6 +2567,7 @@ module.exports.generateKeyPair = generateKeyPair
 module.exports.sign = sign
 module.exports.verify = verify
 module.exports.deriveSecretKey = deriveSecretKey
+module.exports.digestMessage = digestMessage
 
 module.exports.BLOCK_SIZE = BLOCK_SIZE
 module.exports.IV_SIZE = IV_SIZE
@@ -2865,25 +2874,7 @@ async function decryptData(password, imageArray, dataOffset) {
     };
 }
 
-/*
-Возвращает объект скрытого поста.
-Объект:
-{
-  "header": {
-    "magic": "ht",
-    "version": 1,
-    "blocksCount": 9,
-    "timestamp": 1623775315,
-    "type": 0
-  },
-  "post": {
-    "message": "test",
-    "files": []
-  },
-  "verifyResult": null,
-  "isPrivate": false
-}
-*/
+// Возвращает объект скрытого поста
 async function loadPostFromImage(img, password, privateKey) {
     let canvas = document.createElement('canvas');
     canvas.width = img.width;
@@ -2930,13 +2921,15 @@ async function loadPostFromImage(img, password, privateKey) {
         zipOffset = Crypto.BLOCK_SIZE;
     }
 
-    let post = await unzipPostData(decryptedData.data.subarray(zipOffset));
+    let zipDataArray = decryptedData.data.subarray(zipOffset);
+    let zipData = new Blob([zipDataArray], {type: 'application/zip'});
 
     return {
-        'header': decryptedData.header,
-        'post': post,
-        'verifyResult': verifyResult,
-        'isPrivate': isPrivate,
+        timestamp: decryptedData.header.timestamp,
+        publicKey: verifyResult ? verifyResult.publicKey : null,
+        isVerified: verifyResult ? verifyResult.isVerified : null,
+        isPrivate: isPrivate,
+        zipData: zipData,
     };
 }
 
@@ -2996,6 +2989,7 @@ function createFileLinksDiv(files, hasSkippedFiles, postId) {
 
 module.exports.createHiddenPostImpl = createHiddenPostImpl
 module.exports.loadPostFromImage = loadPostFromImage
+module.exports.unzipPostData = unzipPostData
 module.exports.createFileLinksDiv = createFileLinksDiv
 module.exports.MESSAGE_MAX_LENGTH = MESSAGE_MAX_LENGTH
 },{"../lib/jszip.min.js":8,"./crypto.js":9,"./stegano.js":12,"./utils.js":13}],11:[function(require,module,exports){
@@ -3109,9 +3103,10 @@ function convertToHtml(text) {
     return text;
 }
 
-function renderHiddenPost(postResult) {
+function renderHiddenPost(loadedPost, unpackedData) {
     Utils.trace(`HiddenThread: Post is hidden, its object:`);
-    Utils.trace(postResult);
+    Utils.trace(loadedPost);
+    Utils.trace(unpackedData);
 
     let clearPost = document.getElementById('decodedPost');
     clearPost.innerHTML = '';
@@ -3126,30 +3121,30 @@ function renderHiddenPost(postResult) {
     postArticle.classList.add("post__message");
 
     let postArticleMessage = document.createElement('div');
-    postArticleMessage.innerHTML = convertToHtml(postResult.post.message);
+    postArticleMessage.innerHTML = convertToHtml(unpackedData.message);
 
-    if (postResult.isPrivate) {
+    if (loadedPost.isPrivate) {
         postMetadata.appendChild(createElementFromHTML('<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом</i></div>'));
     }
-    let timeString = (new Date(postResult.header.timestamp * 1000))
+    let timeString = (new Date(loadedPost.timestamp * 1000))
         .toISOString().replace('T', ' ').replace(/\.\d+Z/g, '');
 
     postMetadata.appendChild(createElementFromHTML('<div>Дата создания скрытопоста (UTC): ' + timeString + '</div>'));
-    postMetadata.appendChild(Post.createFileLinksDiv(postResult.post.files, postResult.post.hasSkippedFiles, 0));
+    postMetadata.appendChild(Post.createFileLinksDiv(unpackedData.files, unpackedData.hasSkippedFiles, 0));
 
-    if (postResult.verifyResult != null) {
+    if (loadedPost.publicKey != null) {
         let postArticleSign = document.createElement('div');
         postArticleSign.innerHTML =
             'Публичный ключ: <span ' +
-            (postResult.verifyResult.isVerified ? 'style="color:green;"' : 'style="color:red;"') + '>' +
-            postResult.verifyResult.publicKey + '</span>' +
-            (postResult.verifyResult.isVerified ? '' : ' (неверная подпись!)');
+            (loadedPost.isVerified ? 'style="color:green;"' : 'style="color:red;"') + '>' +
+            loadedPost.publicKey + '</span>' +
+            (loadedPost.isVerified ? '' : ' (неверная подпись!)');
         postMetadata.appendChild(postArticleSign);
     }
     postArticle.appendChild(postMetadata);
-    if (postResult.post.unpackResult) {
+    if (unpackedData.unpackResult) {
         postArticle.appendChild(createElementFromHTML(
-            `<div style="font-family:courier new;color:red;">${postResult.post.unpackResult}</div>`));
+            `<div style="font-family:courier new;color:red;">${unpackedData.unpackResult}</div>`));
     }
     postArticle.appendChild(document.createElement('br'));
     postArticle.appendChild(postArticleMessage);
@@ -3184,14 +3179,15 @@ function loadPost() {
             Post.loadPostFromImage(img,
                 document.getElementById('hiddenThreadPasswordDecode').value,
                 document.getElementById('privateKeyDecode').value)
-                .then(function (postResult) {
-                    Utils.trace(postResult);
-                    if (postResult == null)
+                .then(async function (loadedPost) {
+                    Utils.trace(loadedPost);
+                    if (loadedPost == null)
                     {
                         alert('Не удалось декодировать скрытопост - неверный пароль или ключ, либо это обычная картинка')
                         return;
                     }
-                    renderHiddenPost(postResult);
+                    let unpackedData = await Post.unzipPostData(loadedPost.zipData);
+                    renderHiddenPost(loadedPost, unpackedData);
                 });
         });
         img.src = fr.result;

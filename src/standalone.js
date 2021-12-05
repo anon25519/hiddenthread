@@ -108,9 +108,10 @@ function convertToHtml(text) {
     return text;
 }
 
-function renderHiddenPost(postResult) {
+function renderHiddenPost(loadedPost, unpackedData) {
     Utils.trace(`HiddenThread: Post is hidden, its object:`);
-    Utils.trace(postResult);
+    Utils.trace(loadedPost);
+    Utils.trace(unpackedData);
 
     let clearPost = document.getElementById('decodedPost');
     clearPost.innerHTML = '';
@@ -125,30 +126,30 @@ function renderHiddenPost(postResult) {
     postArticle.classList.add("post__message");
 
     let postArticleMessage = document.createElement('div');
-    postArticleMessage.innerHTML = convertToHtml(postResult.post.message);
+    postArticleMessage.innerHTML = convertToHtml(unpackedData.message);
 
-    if (postResult.isPrivate) {
+    if (loadedPost.isPrivate) {
         postMetadata.appendChild(createElementFromHTML('<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом</i></div>'));
     }
-    let timeString = (new Date(postResult.header.timestamp * 1000))
+    let timeString = (new Date(loadedPost.timestamp * 1000))
         .toISOString().replace('T', ' ').replace(/\.\d+Z/g, '');
 
     postMetadata.appendChild(createElementFromHTML('<div>Дата создания скрытопоста (UTC): ' + timeString + '</div>'));
-    postMetadata.appendChild(Post.createFileLinksDiv(postResult.post.files, postResult.post.hasSkippedFiles, 0));
+    postMetadata.appendChild(Post.createFileLinksDiv(unpackedData.files, unpackedData.hasSkippedFiles, 0));
 
-    if (postResult.verifyResult != null) {
+    if (loadedPost.publicKey != null) {
         let postArticleSign = document.createElement('div');
         postArticleSign.innerHTML =
             'Публичный ключ: <span ' +
-            (postResult.verifyResult.isVerified ? 'style="color:green;"' : 'style="color:red;"') + '>' +
-            postResult.verifyResult.publicKey + '</span>' +
-            (postResult.verifyResult.isVerified ? '' : ' (неверная подпись!)');
+            (loadedPost.isVerified ? 'style="color:green;"' : 'style="color:red;"') + '>' +
+            loadedPost.publicKey + '</span>' +
+            (loadedPost.isVerified ? '' : ' (неверная подпись!)');
         postMetadata.appendChild(postArticleSign);
     }
     postArticle.appendChild(postMetadata);
-    if (postResult.post.unpackResult) {
+    if (unpackedData.unpackResult) {
         postArticle.appendChild(createElementFromHTML(
-            `<div style="font-family:courier new;color:red;">${postResult.post.unpackResult}</div>`));
+            `<div style="font-family:courier new;color:red;">${unpackedData.unpackResult}</div>`));
     }
     postArticle.appendChild(document.createElement('br'));
     postArticle.appendChild(postArticleMessage);
@@ -183,14 +184,15 @@ function loadPost() {
             Post.loadPostFromImage(img,
                 document.getElementById('hiddenThreadPasswordDecode').value,
                 document.getElementById('privateKeyDecode').value)
-                .then(function (postResult) {
-                    Utils.trace(postResult);
-                    if (postResult == null)
+                .then(async function (loadedPost) {
+                    Utils.trace(loadedPost);
+                    if (loadedPost == null)
                     {
                         alert('Не удалось декодировать скрытопост - неверный пароль или ключ, либо это обычная картинка')
                         return;
                     }
-                    renderHiddenPost(postResult);
+                    let unpackedData = await Post.unzipPostData(loadedPost.zipData);
+                    renderHiddenPost(loadedPost, unpackedData);
                 });
         });
         img.src = fr.result;

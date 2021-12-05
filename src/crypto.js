@@ -237,6 +237,14 @@ async function deriveSecretKey(privateKeyBase58, publicKeyBase58) {
 
 ///////////////////////////////////////////////////////////////////////////////
 
+async function digestMessage(message) {
+    const msgUint8 = new TextEncoder().encode(message);                           // encode as (utf-8) Uint8Array
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);           // hash the message
+    const hashArray = Array.from(new Uint8Array(hashBuffer));                     // convert buffer to byte array
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join(''); // convert bytes to hex string
+    return hashHex;
+}
+
 module.exports.encrypt = encrypt
 module.exports.decrypt = decrypt
 module.exports.importPublicKeyArrayFromPrivateKey = importPublicKeyArrayFromPrivateKey
@@ -244,6 +252,7 @@ module.exports.generateKeyPair = generateKeyPair
 module.exports.sign = sign
 module.exports.verify = verify
 module.exports.deriveSecretKey = deriveSecretKey
+module.exports.digestMessage = digestMessage
 
 module.exports.BLOCK_SIZE = BLOCK_SIZE
 module.exports.IV_SIZE = IV_SIZE

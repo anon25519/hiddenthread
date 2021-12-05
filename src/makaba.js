@@ -1,6 +1,7 @@
 let Utils = require('./utils.js')
 let Crypto = require('./crypto.js')
 let Post = require('./post.js')
+let HtCache = require('./cache.js')
 
 const CURRENT_VERSION = "0.5";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
@@ -30,52 +31,9 @@ function createElementFromHTML(htmlString) {
     return div.firstElementChild;
 }
 
-// https://medium.com/@karenmarkosyan/how-to-manage-promises-into-dynamic-queue-with-vanilla-javascript-9d0d1f8d4df5
-class Queue {
-    static queue = [];
-    static pendingPromise = false;
-
-    static enqueue(promise) {
-      return new Promise((resolve, reject) => {
-          this.queue.push({
-              promise,
-              resolve,
-              reject,
-          });
-          this.dequeue();
-      });
-    }
-
-  static dequeue() {
-      if (this.workingOnPromise) {
-        return false;
-      }
-      const item = this.queue.shift();
-      if (!item) {
-        return false;
-      }
-      try {
-        this.workingOnPromise = true;
-        item.promise()
-          .then((value) => {
-            this.workingOnPromise = false;
-            item.resolve(value);
-            this.dequeue();
-          })
-          .catch(err => {
-            this.workingOnPromise = false;
-            item.reject(err);
-            this.dequeue();
-          })
-      } catch (err) {
-        this.workingOnPromise = false;
-        item.reject(err);
-        this.dequeue();
-      }
-      return true;
-    }
+function getImgName(url) {
+    return url.split('/').pop().split('.')[0];
 }
-
 
 function createHiddenPost() {
     let imageContainerDiv = document.getElementById('imageContainerDiv');
@@ -293,9 +251,10 @@ function getClosingTagIndex(text, i, tag) {
 }
 
 // Добавление HTML скрытопоста к основному посту
-function addHiddenPostToHtml(postId, postResult) {
+function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     Utils.trace(`HiddenThread: Post ${postId} is hidden, its object:`);
-    Utils.trace(postResult);
+    Utils.trace(loadedPost);
+    Utils.trace(unpackedData);
 
     let clearPost = document.getElementById('post-' + postId);
     let postBodyDiv = document.createElement('div');
@@ -312,34 +271,34 @@ function addHiddenPostToHtml(postId, postResult) {
     postArticle.classList.add("post__message");
 
     let postArticleMessage = document.createElement('div');
-    postArticleMessage.innerHTML = convertToHtml(postResult.post.message);
+    postArticleMessage.innerHTML = convertToHtml(unpackedData.message);
 
-    if (postResult.isPrivate) {
+    if (loadedPost.isPrivate) {
         postMetadata.appendChild(createElementFromHTML('<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом</i></div>'));
     }
-    let timeString = (new Date(postResult.header.timestamp * 1000))
+    let timeString = (new Date(loadedPost.timestamp * 1000))
         .toISOString().replace('T', ' ').replace(/\.\d+Z/g, '');
     let d = clearPost.getElementsByClassName('post__time')[0].textContent.split(' ');
     let postDateMs = Date.parse(`20${d[0].split('/')[2]}-${d[0].split('/')[1]}-${d[0].split('/')[0]}T${d[2]}Z`);
-    if (Math.abs(postDateMs/1000 - postResult.header.timestamp) > 24*3600) {
+    if (Math.abs(postDateMs/1000 - loadedPost.timestamp) > 24*3600) {
         timeString += ' <span style="color:red;">(неверное время поста!)</span>';
     }
     postMetadata.appendChild(createElementFromHTML('<div>Дата создания скрытопоста (UTC): ' + timeString + '</div>'));
-    postMetadata.appendChild(Post.createFileLinksDiv(postResult.post.files, postResult.post.hasSkippedFiles, postId));
+    postMetadata.appendChild(Post.createFileLinksDiv(unpackedData.files, unpackedData.hasSkippedFiles, postId));
 
-    if (postResult.verifyResult != null) {
+    if (loadedPost.publicKey) {
         let postArticleSign = document.createElement('div');
         postArticleSign.innerHTML =
             'Публичный ключ: <span style="word-wrap:normal;word-break:normal;color:' +
-            (postResult.verifyResult.isVerified ? 'green' : 'red') + ';">' +
-            postResult.verifyResult.publicKey + '</span>' +
-            (postResult.verifyResult.isVerified ? '' : ' (неверная подпись!)');
+            (loadedPost.isVerified ? 'green' : 'red') + ';">' +
+            loadedPost.publicKey + '</span>' +
+            (loadedPost.isVerified ? '' : ' (неверная подпись!)');
         postMetadata.appendChild(postArticleSign);
     }
     postArticle.appendChild(postMetadata);
-    if (postResult.post.unpackResult) {
+    if (unpackedData.unpackResult) {
         postArticle.appendChild(createElementFromHTML(
-            `<div style="font-family:courier new;color:red;">${postResult.post.unpackResult}</div>`));
+            `<div style="font-family:courier new;color:red;">${unpackedData.unpackResult}</div>`));
     }
     postArticle.appendChild(document.createElement('br'));
     postArticle.appendChild(postArticleMessage);
@@ -452,10 +411,10 @@ function parseMessage(message)
     }
 };
 
-function renderHiddenPost(postId, postResult) {
-    let res = parseMessage(postResult.post.message);
-    postResult.post.message = res.message;
-    addHiddenPostToHtml(postId, postResult);
+function renderHiddenPost(postId, loadedPost, unpackedData) {
+    let res = parseMessage(unpackedData.message);
+    unpackedData.message = res.message;
+    addHiddenPostToHtml(postId, loadedPost, unpackedData);
     addReplyLinks(postId, res.refPostIdList);
     // TODO: отображение скрытопостов во всплывающих постах с куклоскриптом
     addHiddenPostToObj(postId); // Текст скрытопоста берется из HTML
@@ -470,27 +429,66 @@ function reloadHiddenPosts() {
     loadHiddenThread();
 }
 
+
+async function loadAndRenderPost(postId, url, password, privateKey) {
+    let img = new Image();
+    img.src = url;
+    await img.decode();
+
+    let imgId = getImgName(url);
+    loadedImages.add(imgId);
+    document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
+
+    let loadedPost = await Post.loadPostFromImage(img, password, privateKey);
+
+    if (!loadedPost)
+        return loadedPost;
+
+    loadedPosts.add(imgId);
+    document.getElementById("hiddenPostsLoadedCount").textContent = loadedPosts.size;
+
+    let unpackedData = await Post.unzipPostData(loadedPost.zipData);
+    renderHiddenPost(postId, loadedPost, unpackedData);
+
+    return loadedPost;
+}
+
 /*
 Проверяет есть ли в этом посте скрытый пост, расшифровывает
 и выводит результат
 */
-async function loadPost(postId, file_url) {
-    let img = new Image();
-    img.src = file_url;
-    await img.decode();
+async function loadPost(postId, url, password, privateKey, passwordHash, privateKeyHash) {
+    Utils.trace('HiddenThread: loading post ' + postId + ' ' + url);
 
-    Utils.trace('HiddenThread: loading post ' + postId + ' ' + file_url);
-    loadedImages.add(file_url);
-    document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
-    let postResult = await Post.loadPostFromImage(
-        img,
-        document.getElementById('hiddenThreadPassword').value,
-        document.getElementById('privateKey').value)
+    let imgId = getImgName(url);
+    let cachedPost = null;
+    try {
+        cachedPost = await HtCache.getCachedPost(imgId);
+    } catch (e) {}
 
-    if(postResult == null) return;
-    loadedPosts.add(file_url);
-    document.getElementById("hiddenPostsLoadedCount").textContent = loadedPosts.size;
-    renderHiddenPost(postId, postResult);
+    if (cachedPost) {
+        // Если в кэше не скрытопост и в кэше нет текущего пароля или ключа,
+        // то загружаем пост, выводим его (если удалось декодировать), обновляем кэш
+        if (!cachedPost.hiddenPost && (cachedPost.wrongPasswordHashes.indexOf(passwordHash) == -1 ||
+            cachedPost.wrongPrivateKeyHashes.indexOf(privateKeyHash) == -1)) {
+            let loadedPost = await loadAndRenderPost(postId, url, password, privateKey);
+            try {
+                await HtCache.updateCache(imgId, loadedPost, passwordHash, privateKeyHash);
+            } catch (e) {}
+        }
+        // Если в кэше скрытопост, выводим его
+        else if(cachedPost.hiddenPost) {
+            let unpackedPost = await Post.unzipPostData(cachedPost.hiddenPost.zipData);
+            renderHiddenPost(postId, cachedPost.hiddenPost, unpackedPost);
+        }
+    } else {
+        // Если в кэше ничего нет, то загружаем пост,
+        // выводим его (если удалось декодировать), обновляем кэш
+        let loadedPost = await loadAndRenderPost(postId, url, password, privateKey);
+        try {
+            await HtCache.updateCache(imgId, loadedPost, passwordHash, privateKeyHash);
+        } catch (e) {}
+    }
 }
 
 function getFileName() {
@@ -652,6 +650,9 @@ function createInterface() {
             <div>
                 <div><input id="htIsDebugLogEnabled" type="checkbox"> <span>Включить debug-лог</span></div>
                 <div><input id="htIsQueueLoadEnabled" type="checkbox"> <span>Включить последовательную загрузку скрытопостов</span></div>
+                <div><input id="htMaxCacheSize" type="number" min="0" step="1" size="12"> <span>Макс. размер кэша, Мб</span></div>
+                <div>Текущий размер кэша: <span id="htCacheSize">???</span></div>
+                <div><button id="htClearCache">Очистить кэш</button></div>
             </div>
             <hr>
             <div>
@@ -666,6 +667,7 @@ function createInterface() {
         let settingsWindow = document.getElementById('hiddenThreadSettingsWindow');
         document.getElementById("htIsDebugLogEnabled").checked = storage.isDebugLogEnabled;
         document.getElementById("htIsQueueLoadEnabled").checked = storage.isQueueLoadEnabled;
+        document.getElementById("htMaxCacheSize").value = storage.maxCacheSize ? storage.maxCacheSize : 0;
         settingsWindow.style.display = settingsWindow.style.display == 'none' ? 'block' : 'none';
     }
     document.getElementById("hiddenThreadSettingsCancel").onclick = function() {
@@ -674,7 +676,23 @@ function createInterface() {
     document.getElementById("hiddenThreadSettingsSave").onclick = function() {
         setStorage({ isDebugLogEnabled: document.getElementById("htIsDebugLogEnabled").checked });
         setStorage({ isQueueLoadEnabled: document.getElementById("htIsQueueLoadEnabled").checked });
+        let maxCacheSize = parseInt(document.getElementById("htMaxCacheSize").value);
+        setStorage({ maxCacheSize: maxCacheSize ? maxCacheSize : 0 });
         document.getElementById('hiddenThreadSettingsWindow').style.display = 'none';
+    }
+    let clearCacheButton = document.getElementById("htClearCache");
+    clearCacheButton.onclick = async function() {
+        let oldText = clearCacheButton.textContent;
+        clearCacheButton.textContent = 'Очищаем...';
+        clearCacheButton.disabled = true;
+        try {
+            await HtCache.clearStore();
+            alert('Кэш очищен');
+        } catch (e) {
+            alert('Не удалось очистить кэш: ' + e);
+        }
+        clearCacheButton.textContent = oldText;
+        clearCacheButton.disabled = false;
     }
 
     // listeners
@@ -831,19 +849,49 @@ function getPostsToScanFromHtml() {
 }
 
 
-// множество просмотренных постов
-var watchedPosts = new Set();
-// множество просмотренных url картинок
-var watchedImages = new Set();
-// множество url с скаченными картинками
-var loadedImages = new Set();
-// множество url с загруженными скрытопостами
-var loadedPosts = new Set();
+function getHumanReadableSize(bytes) {
+    var thresh = 1024;
+    if(Math.abs(bytes) < thresh) {
+        return bytes + ' B';
+    }
+    var units = ['KB','MB','GB','TB','PB','EB','ZB','YB'];
+    var u = -1;
+    do {
+        bytes /= thresh;
+        ++u;
+    } while(Math.abs(bytes) >= thresh && u < units.length - 1);
+    return bytes.toFixed(1)+' '+units[u];
+}
+
+async function getCacheSizeReadable() {
+    try {
+        let size = await HtCache.getCacheSize();
+        return getHumanReadableSize(size);
+    } catch (e) {}
+    return "???";
+}
+
+async function getIdbUsageReadable() {
+    try {
+        const quota = await navigator.storage.estimate();
+        return getHumanReadableSize(quota.usage);
+    } catch (e) {}
+    return "???";
+}
+
+// множество ID просмотренных постов
+let watchedPosts = new Set();
+// множество ID просмотренных картинок
+let watchedImages = new Set();
+// множество ID загруженных картинок
+let loadedImages = new Set();
+// множество ID картинок с загруженными скрытопостами
+let loadedPosts = new Set();
 let scanning = false;
 /*
 Просмотреть все посты и попробовать расшифровать
 */
-function loadHiddenThread() {
+async function loadHiddenThread() {
     if (scanning) {
         return; // Чтобы не запускалось в нескольких потоках
     }
@@ -852,18 +900,26 @@ function loadHiddenThread() {
     let postsToScan = getPostsToScan();
 
     document.getElementById("imagesCount").textContent = getImagesCount(postsToScan).toString();
+    document.getElementById('htCacheSize').textContent = `???+ ${await getCacheSizeReadable()} (IDB usage: ${await getIdbUsageReadable()})`;
 
+    let password = document.getElementById('hiddenThreadPassword').value;
+    let privateKey = document.getElementById('privateKey').value;
+    let passwordHash = await Crypto.digestMessage(password);
+    let privateKeyHash = await Crypto.digestMessage(privateKey);
+
+    let loadPostPromises = [];
     for (let post of postsToScan) {
         for (let url of post.urls) {
-            if (loadedImages.has(url) || loadedPosts.has(url) || watchedImages.has(url)) {
+            let imgId = getImgName(url);
+            if (loadedImages.has(imgId) || loadedPosts.has(imgId) || watchedImages.has(imgId)) {
                 continue;
             }
-            watchedImages.add(url);
+            watchedImages.add(imgId);
 
             function promiseGenerator() {
                 return new Promise(async function(resolve, reject) {
                     try {
-                        await loadPost(post.postId, url);
+                        await loadPost(post.postId, url, password, privateKey, passwordHash, privateKeyHash);
                     }
                     catch(e) {
                         Utils.trace('HiddenThread: Ошибка при загрузке поста: ' + e + ' stack:\n' + e.stack);
@@ -872,10 +928,11 @@ function loadHiddenThread() {
                 });
             }
 
+            let p = promiseGenerator();
             if(storage.isQueueLoadEnabled) {
-                Queue.enqueue(promiseGenerator);
+                await p;
             } else {
-                promiseGenerator();
+                loadPostPromises.push(p);
             }
         }
         if (!watchedPosts.has(post.postId)) {
@@ -885,7 +942,12 @@ function loadHiddenThread() {
             }
         }
     }
+
+    await Promise.all(loadPostPromises);
+
     document.getElementById("imagesLoadedCount").textContent = loadedImages.size;
+    document.getElementById('htCacheSize').textContent = `${await getCacheSizeReadable()} (IDB usage: ${await getIdbUsageReadable()})`;
+
     scanning = false;
 }
 
@@ -911,6 +973,11 @@ if (!isMakaba()) return;
 if (!storage.isDebugLogEnabled)
     Utils.trace = function() {}
 
+try {
+    HtCache.initCacheStorage(storage.maxCacheSize ? storage.maxCacheSize : 0);
+} catch (e) {
+    Utils.trace('HiddenThread: initCacheStorage error: ' + e);
+}
 createInterface();
 CheckVersion();
 
