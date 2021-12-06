@@ -16,7 +16,7 @@
 
 Альтернативные варианты без установки юзерскрипта:
 * Использовать локальную версию - скачать файлы [hiddenthread_standalone.html](./standalone/hiddenthread_standalone.html) и [hiddenthread.standalone.js](./standalone/hiddenthread.standalone.js), и открыть `hiddenthread_standalone.html` в любом браузере
-* Использовать версию с [jsfiddle](https://jsfiddle.net/ws9rdLck/1)
+* Использовать [онлайн версию](https://anon25519.github.io/hiddenthread/standalone/hiddenthread_standalone.html)
 
 ## Как пользоваться?
 Для отправки скрытопоста нужно сделать следующие вещи:
