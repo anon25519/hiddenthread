@@ -638,7 +638,10 @@ function createInterface() {
         #hiddenPostDiv input[type=button] {
             color: var(--theme_default_btntext);
         }
-        .post_type_hiddenthread { border-left: 3px solid #F00000; border-right: 3px solid #F00000; }
+        .post_type_hiddenthread {
+            border-left: 3px solid #${storage.postsColor ? storage.postsColor : 'F00000'};
+            border-right: 3px solid #${storage.postsColor ? storage.postsColor : 'F00000'};
+        }
     `
     if (style.styleSheet) {
         // This is required for IE8 and below.
@@ -664,6 +667,7 @@ function createInterface() {
                 <div><input id="htIsDebugLogEnabled" type="checkbox"> <span>Включить debug-лог</span></div>
                 <div><input id="htIsQueueLoadEnabled" type="checkbox"> <span>Включить последовательную загрузку скрытопостов</span></div>
                 <div><input id="htIsPreviewDisabled" type="checkbox"> <span>Отключить превью картинок в скрытопостах</span></div>
+                <div><input id="htPostsColor" maxlength="6" size="6"> <span>Цвет выделения скрытопостов (в hex)</span></div>
                 <div><input id="htMaxCacheSize" type="number" min="0" step="1" size="12"> <span>Макс. размер кэша, Мб</span></div>
                 <div>Текущий размер кэша: <span id="htCacheSize">???</span></div>
                 <div><button id="htClearCache">Очистить кэш</button></div>
@@ -682,6 +686,7 @@ function createInterface() {
         document.getElementById("htIsDebugLogEnabled").checked = storage.isDebugLogEnabled;
         document.getElementById("htIsQueueLoadEnabled").checked = storage.isQueueLoadEnabled;
         document.getElementById("htIsPreviewDisabled").checked = storage.isPreviewDisabled;
+        document.getElementById("htPostsColor").value = storage.postsColor ? storage.postsColor : 'F00000';
         document.getElementById("htMaxCacheSize").value = storage.maxCacheSize ? storage.maxCacheSize : 0;
         settingsWindow.style.display = settingsWindow.style.display == 'none' ? 'block' : 'none';
     }
@@ -692,6 +697,7 @@ function createInterface() {
         setStorage({ isDebugLogEnabled: document.getElementById("htIsDebugLogEnabled").checked });
         setStorage({ isQueueLoadEnabled: document.getElementById("htIsQueueLoadEnabled").checked });
         setStorage({ isPreviewDisabled: document.getElementById("htIsPreviewDisabled").checked });
+        setStorage({ postsColor: document.getElementById("htPostsColor").value });
         let maxCacheSize = parseInt(document.getElementById("htMaxCacheSize").value);
         setStorage({ maxCacheSize: maxCacheSize ? maxCacheSize : 0 });
         document.getElementById('hiddenThreadSettingsWindow').style.display = 'none';
