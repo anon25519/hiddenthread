@@ -135,7 +135,7 @@ function renderHiddenPost(loadedPost, unpackedData) {
         .toISOString().replace('T', ' ').replace(/\.\d+Z/g, '');
 
     postMetadata.appendChild(createElementFromHTML('<div>Дата создания скрытопоста (UTC): ' + timeString + '</div>'));
-    postMetadata.appendChild(Post.createFileLinksDiv(unpackedData.files, unpackedData.hasSkippedFiles, 0));
+    postMetadata.appendChild(Post.createFileLinksDiv(unpackedData.files, unpackedData.hasSkippedFiles, 0, true));
 
     if (loadedPost.publicKey != null) {
         let postArticleSign = document.createElement('div');

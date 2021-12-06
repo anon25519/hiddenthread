@@ -149,6 +149,18 @@ async function createHiddenPostImpl(container, message, files, password, private
     return imageResult;
 }
 
+async function getMimeType(blob) {
+    let data = new Uint8Array(await blob.slice(0,12).arrayBuffer());
+    if (data[0]==0x89 && data[1]==0x50 && data[2]==0x4E && data[3]==0x47) {
+        return 'image/png';
+    } else if (data[0]==0xFF && data[1]==0xD8 && data[2]==0xFF) {
+        return 'image/jpeg';
+    } else if (data[0]==0x52 && data[1]==0x49 && data[2]==0x46 && data[3]==0x46 &&
+        data[8]==0x57 && data[9]==0x45 && data[10]==0x42 && data[11]==0x50) {
+        return 'image/webp';
+    }
+}
+
 async function unzipPostData(zipData) {
     let zip = new JSZip();
 
@@ -180,20 +192,9 @@ async function unzipPostData(zipData) {
             }
             else {
                 let fileData = await archive.file(filename).async('blob');
-                const extMimeDict = {
-                    'jpg': 'image/jpeg',
-                    'jpeg': 'image/jpeg',
-                    'png': 'image/png',
-                    'gif': 'image/gif',
-                    'txt': 'text/plain; charset=utf-8',
-                    'webm': 'video/webm',
-                    'mp4': 'video/mp4',
-                    'mp3': 'audio/mpeg',
-                    'pdf': 'application/pdf',
-                };
-                let ext = filename.split('.').pop().toLowerCase();
-                if (extMimeDict[ext]) {
-                    fileData = fileData.slice(0, fileData.size, extMimeDict[ext]);
+                let mimeType = await getMimeType(fileData);
+                if (mimeType) {
+                    fileData = fileData.slice(0, fileData.size, mimeType);
                 }
                 files.push({'name': filename, 'data': fileData});
             }
@@ -357,13 +358,28 @@ async function loadPostFromImage(img, password, privateKey) {
     };
 }
 
-function createFileLinksDiv(files, hasSkippedFiles, postId) {
+function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
     function createDownloadLink(name, text, blobLink) {
         let downloadLink = document.createElement('a');
         downloadLink.download = name;
         downloadLink.innerText = text;
         downloadLink.href = blobLink;
         return downloadLink;
+    }
+    function createImageLink(blobLink) {
+        let imageLink = document.createElement('a');
+        let image = document.createElement('img');
+        image.src = blobLink;
+        imageLink.appendChild(image);
+        image.style = 'max-width: 200px;';
+        imageLink.href = blobLink;
+        imageLink.target = "_blank";
+        return imageLink;
+    }
+    function isImage(mime) {
+        return mime && (mime.endsWith('/jpeg') ||
+            mime.endsWith('/png') ||
+            mime.endsWith('/webp'));
     }
 
     let fileLinksDiv = document.createElement('div');
@@ -373,26 +389,28 @@ function createFileLinksDiv(files, hasSkippedFiles, postId) {
 
     let normalFilesCount = hasSkippedFiles > 0 ? files.length - 1 : files.length;
     for (let i = 0; i < normalFilesCount; i++) {
+        let fileDiv = document.createElement('div');
+        fileDiv.style = 'display: inline-block;';
+
         let filename = files[i].name;
         if (filename.length > MAX_FILENAME_LENGTH) {
             filename = filename.substring(0, MAX_FILENAME_LENGTH - 10) + '[...]' +
                 filename.substring(filename.length - 5);
         }
-        let mime = files[i].data.type;
         let blobLink = URL.createObjectURL(files[i].data);
-        // Если тип известен, создаем ссылку для открытия файла
-        // в новой вкладке, иначе только ссылку для скачивания
-        if (mime) {
-            let link = document.createElement('a');
-            link.target = "_blank";
-            link.innerText = filename;
-            link.href = blobLink;
-            fileLinksDiv.appendChild(link);
-            fileLinksDiv.innerHTML += ' ';
-        }
+        let link = document.createElement('a');
+        link.target = "_blank";
+        link.innerText = filename;
+        link.href = blobLink;
+        fileDiv.appendChild(link);
+        fileDiv.innerHTML += ' ';
 
-        fileLinksDiv.appendChild(createDownloadLink(files[i].name,
-            (mime ? '' : filename) + ' \u2193', blobLink));
+        fileDiv.appendChild(createDownloadLink(files[i].name, ' \u2193', blobLink));
+        if (isPreview && isImage(files[i].data.type)) {
+            fileDiv.appendChild(document.createElement('br'));
+            fileDiv.appendChild(createImageLink(blobLink));
+        }
+        fileLinksDiv.appendChild(fileDiv);
 
         if (i < normalFilesCount - 1) {
             fileLinksDiv.innerHTML += ', ';
@@ -401,11 +419,11 @@ function createFileLinksDiv(files, hasSkippedFiles, postId) {
     if (hasSkippedFiles > 0) {
         let allFiles = createDownloadLink(`all_files_${postId}.zip`,
             'скачать все', URL.createObjectURL(files[files.length - 1].data)).outerHTML;
-        fileLinksDiv.innerHTML = `Файлы (${allFiles}): ` + fileLinksDiv.innerHTML;
+        fileLinksDiv.innerHTML = `Файлы (${allFiles}): ${isPreview ? '<br>' : ''}${fileLinksDiv.innerHTML}`;
         fileLinksDiv.innerHTML += ` (некоторые файлы пропущены)`;
     }
     else {
-        fileLinksDiv.innerHTML = 'Файлы: ' + fileLinksDiv.innerHTML;
+        fileLinksDiv.innerHTML = `Файлы: ${isPreview ? '<br>' : ''}${fileLinksDiv.innerHTML}`;
     }
     return fileLinksDiv;
 }

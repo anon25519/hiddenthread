@@ -283,7 +283,8 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
         timeString += ' <span style="color:red;">(неверное время поста!)</span>';
     }
     postMetadata.appendChild(createElementFromHTML('<div>Дата создания скрытопоста (UTC): ' + timeString + '</div>'));
-    postMetadata.appendChild(Post.createFileLinksDiv(unpackedData.files, unpackedData.hasSkippedFiles, postId));
+    postMetadata.appendChild(Post.createFileLinksDiv(unpackedData.files,
+        unpackedData.hasSkippedFiles, postId, !storage.isPreviewDisabled));
 
     if (loadedPost.publicKey) {
         let postArticleSign = document.createElement('div');
@@ -662,6 +663,7 @@ function createInterface() {
             <div>
                 <div><input id="htIsDebugLogEnabled" type="checkbox"> <span>Включить debug-лог</span></div>
                 <div><input id="htIsQueueLoadEnabled" type="checkbox"> <span>Включить последовательную загрузку скрытопостов</span></div>
+                <div><input id="htIsPreviewDisabled" type="checkbox"> <span>Отключить превью картинок в скрытопостах</span></div>
                 <div><input id="htMaxCacheSize" type="number" min="0" step="1" size="12"> <span>Макс. размер кэша, Мб</span></div>
                 <div>Текущий размер кэша: <span id="htCacheSize">???</span></div>
                 <div><button id="htClearCache">Очистить кэш</button></div>
@@ -679,6 +681,7 @@ function createInterface() {
         let settingsWindow = document.getElementById('hiddenThreadSettingsWindow');
         document.getElementById("htIsDebugLogEnabled").checked = storage.isDebugLogEnabled;
         document.getElementById("htIsQueueLoadEnabled").checked = storage.isQueueLoadEnabled;
+        document.getElementById("htIsPreviewDisabled").checked = storage.isPreviewDisabled;
         document.getElementById("htMaxCacheSize").value = storage.maxCacheSize ? storage.maxCacheSize : 0;
         settingsWindow.style.display = settingsWindow.style.display == 'none' ? 'block' : 'none';
     }
@@ -688,6 +691,7 @@ function createInterface() {
     document.getElementById("hiddenThreadSettingsSave").onclick = function() {
         setStorage({ isDebugLogEnabled: document.getElementById("htIsDebugLogEnabled").checked });
         setStorage({ isQueueLoadEnabled: document.getElementById("htIsQueueLoadEnabled").checked });
+        setStorage({ isPreviewDisabled: document.getElementById("htIsPreviewDisabled").checked });
         let maxCacheSize = parseInt(document.getElementById("htMaxCacheSize").value);
         setStorage({ maxCacheSize: maxCacheSize ? maxCacheSize : 0 });
         document.getElementById('hiddenThreadSettingsWindow').style.display = 'none';
