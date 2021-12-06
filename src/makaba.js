@@ -35,7 +35,7 @@ function getImgName(url) {
     return url.split('/').pop().split('.')[0];
 }
 
-function createHiddenPost() {
+async function createHiddenPost() {
     let imageContainerDiv = document.getElementById('imageContainerDiv');
     imageContainerDiv.innerHTML = '';
 
@@ -75,7 +75,7 @@ function createHiddenPost() {
         if (maxDataRatio == 0) maxDataRatio = 1;
     }
 
-    Post.createHiddenPostImpl(
+    let imageResult = await Post.createHiddenPostImpl(
         {
             'image': container,
             'maxDataRatio': maxDataRatio,
@@ -85,66 +85,65 @@ function createHiddenPost() {
         document.getElementById('hiddenFilesInput').files,
         document.getElementById('hiddenThreadPassword').value,
         document.getElementById('privateKey').value,
-        document.getElementById('otherPublicKey').value)
-        .then(function (imageResult) {
-            imageResult.canvas.toBlob(function (blob) {
-                blob.name = getFileName();
+        document.getElementById('otherPublicKey').value);
 
-                // Вставляем картинку в форму для отображения пользователю
-                let img = document.createElement('img');
-                img.style = "max-width: 300px;";
-                let imgUrl = URL.createObjectURL(blob);
-              
-                img.src = imgUrl;
-                imageContainerDiv.appendChild(createElementFromHTML('<span>Сохрани изображение ниже и вставь в форму отправки, если оно не вставилось автоматически:</span>'));
-                imageContainerDiv.appendChild(document.createElement('br'));
-                imageContainerDiv.appendChild(img);
-
-                let downloadLink  = document.createElement('a');
-                downloadLink.innerText = 'Сохранить картинку'
-                downloadLink.href = imgUrl;
-                downloadLink.download = blob.name;
-                imageContainerDiv.appendChild(document.createElement('br'));
-                imageContainerDiv.appendChild(downloadLink);
-
-                // Вставляем картинку в форму отправки
-                if (isDollchan()) {
-                    let containers = document.getElementsByClassName('de-hiddencontainer-thumb');
-                    let containerId = containers.length == 0 ? 0 : parseInt(containers[0].id.split('-').pop()) + 1;
-                    let inputFileThumbTemplate =
-                        `<div id="de-hiddencontainer-thumb-${containerId}" class="de-hiddencontainer-thumb" style="display: inline-block;">`+
-                        `  <div class="de-file">`+
-                        `    <div class="de-file-img">`+
-                        `      <div class="de-file-img" title="${blob.name}">`+
-                        `        <img class="de-file-img" src="${URL.createObjectURL(blob)}">`+
-                        `      </div>`+
-                        `    </div>`+
-                        `  </div>`+
-                        `<input type="button" onclick="`+
-                        `document.getElementById('de-hiddencontainer-input-${containerId}').value = null;`+
-                        `document.getElementById('de-hiddencontainer-input-${containerId}').remove();`+
-                        `document.getElementById('de-hiddencontainer-thumb-${containerId}').remove();" value="X"/>`+
-                        `</div>`;
-                    let inputFileTemplate = `<div style="display: none;"><input id="de-hiddencontainer-input-${containerId}" type="file" name="formimages[]" class="de-file-input" multiple="true" style="display: none;"></div>'`;
-                    document.getElementsByClassName('postform__raw filer')[0].insertAdjacentHTML("afterbegin", inputFileTemplate);
-                    let file = new File([blob], blob.name, {type: blob.type});
-                    let container = new DataTransfer();
-                    container.items.add(file);
-                    document.getElementById(`de-hiddencontainer-input-${containerId}`).files = container.files;
-
-                    document.getElementById('de-file-area').insertAdjacentHTML("afterbegin", inputFileThumbTemplate);
-                }
-                else {
-                    window.FormFiles.addMultiFiles([blob]);
-                }
-            });
-
-            alert('Спрятано ' + imageResult.len + ' байт (занято ' + imageResult.percent + '% изображения)');
-        })
-        .catch(function (e) {
-            Utils.trace('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
-            alert('Ошибка при создании скрытопоста: ' + e);
+    let toBlobPromise = new Promise(function(resolve, reject) {
+        imageResult.canvas.toBlob(function(blob) {
+            resolve(blob);
         });
+    });
+    let blob = await toBlobPromise;
+    blob.name = getFileName();
+
+    // Вставляем картинку в форму для отображения пользователю
+    let img = document.createElement('img');
+    img.style = "max-width: 300px;";
+    let imgUrl = URL.createObjectURL(blob);
+    
+    img.src = imgUrl;
+    imageContainerDiv.appendChild(createElementFromHTML('<span>Сохрани изображение ниже и вставь в форму отправки, если оно не вставилось автоматически:</span>'));
+    imageContainerDiv.appendChild(document.createElement('br'));
+    imageContainerDiv.appendChild(img);
+
+    let downloadLink  = document.createElement('a');
+    downloadLink.innerText = 'Сохранить картинку'
+    downloadLink.href = imgUrl;
+    downloadLink.download = blob.name;
+    imageContainerDiv.appendChild(document.createElement('br'));
+    imageContainerDiv.appendChild(downloadLink);
+
+    // Вставляем картинку в форму отправки
+    if (isDollchan()) {
+        let containers = document.getElementsByClassName('de-hiddencontainer-thumb');
+        let containerId = containers.length == 0 ? 0 : parseInt(containers[0].id.split('-').pop()) + 1;
+        let inputFileThumbTemplate =
+            `<div id="de-hiddencontainer-thumb-${containerId}" class="de-hiddencontainer-thumb" style="display: inline-block;">`+
+            `  <div class="de-file">`+
+            `    <div class="de-file-img">`+
+            `      <div class="de-file-img" title="${blob.name}">`+
+            `        <img class="de-file-img" src="${URL.createObjectURL(blob)}">`+
+            `      </div>`+
+            `    </div>`+
+            `  </div>`+
+            `<input type="button" onclick="`+
+            `document.getElementById('de-hiddencontainer-input-${containerId}').value = null;`+
+            `document.getElementById('de-hiddencontainer-input-${containerId}').remove();`+
+            `document.getElementById('de-hiddencontainer-thumb-${containerId}').remove();" value="X"/>`+
+            `</div>`;
+        let inputFileTemplate = `<div style="display: none;"><input id="de-hiddencontainer-input-${containerId}" type="file" name="formimages[]" class="de-file-input" multiple="true" style="display: none;"></div>'`;
+        document.getElementsByClassName('postform__raw filer')[0].insertAdjacentHTML("afterbegin", inputFileTemplate);
+        let file = new File([blob], blob.name, {type: blob.type});
+        let container = new DataTransfer();
+        container.items.add(file);
+        document.getElementById(`de-hiddencontainer-input-${containerId}`).files = container.files;
+
+        document.getElementById('de-file-area').insertAdjacentHTML("afterbegin", inputFileThumbTemplate);
+    }
+    else {
+        window.FormFiles.addMultiFiles([blob]);
+    }
+
+    return {len: imageResult.len, percent: imageResult.percent};
 }
 
 const tags = [
@@ -739,8 +738,21 @@ function createInterface() {
     document.getElementById('hiddenContainerClearButton').onclick = function () {
         document.getElementById('hiddenContainerInput').value = null;
     }
-    document.getElementById('createHiddenPostButton').onclick = function () {
-        createHiddenPost();
+    let createHiddenPostButton = document.getElementById('createHiddenPostButton');
+    createHiddenPostButton.onclick = async function () {
+        let oldText = createHiddenPostButton.value;
+        createHiddenPostButton.value = 'Генерируем картинку...';
+        createHiddenPostButton.disabled = true;
+        try {
+            let res = await createHiddenPost();
+            if (res)
+                alert('Спрятано ' + res.len + ' байт (занято ' + res.percent + '% изображения)');
+        } catch (e) {
+            Utils.trace('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
+            alert('Ошибка при создании скрытопоста: ' + e);
+        }
+        createHiddenPostButton.value = oldText;
+        createHiddenPostButton.disabled = false;
     }
     document.getElementById('generateKeyPairButton').onclick = function () {
         if (!document.getElementById('privateKey').value ||
