@@ -4255,6 +4255,105 @@ async function loadPostFromImage(img, password, privateKey) {
     };
 }
 
+function createImagePreview(blobLink) {
+    let imagePreviewLink = document.createElement('a');
+    let imagePreview = document.createElement('img');
+    imagePreview.src = blobLink;
+    imagePreviewLink.appendChild(imagePreview);
+    imagePreview.style = 'max-width: 200px;';
+    imagePreviewLink.href = blobLink;
+    imagePreviewLink.target = "_blank";
+
+    function imagePreviewClickListener(e) {
+        e.preventDefault();
+
+        // Закрываем текущую картинку при открытии новой
+        let prevImageExpandedDiv = document.getElementById('htImageExpanded');
+        if (prevImageExpandedDiv) {
+            prevImageExpandedDiv.remove();
+            if (prevImageExpandedDiv.children[0].href == imagePreviewLink.href)
+                return;
+        }
+
+        let imageExpanded = document.createElement('img');
+        imageExpanded.src = blobLink;
+        imageExpanded.style = 'width:inherit;height:inherit;border:2px solid #222;';
+
+        let initLeft = window.innerWidth/2 - imageExpanded.width/2;
+        let initTop = window.innerHeight/2 - imageExpanded.height/2;
+
+        // Уменьшаем картинку сразу, если он не влезает в экран
+        let initScale = 1;
+        let widthFill = imageExpanded.width / window.innerWidth;
+        let heightFill = imageExpanded.height / window.innerHeight;
+        let maxFill = Math.max(widthFill, heightFill);
+        if (maxFill > 0.8)
+            initScale = 0.8 / maxFill;
+        let scale = initScale;
+    
+        let imageExpandedDiv = document.createElement('div');
+        imageExpandedDiv.id = 'htImageExpanded';
+        imageExpandedDiv.style.zIndex = 0;
+        imageExpandedDiv.style.left = `${initLeft}px`;
+        imageExpandedDiv.style.top = `${initTop}px`;
+        imageExpandedDiv.style.position = 'fixed';
+        imageExpandedDiv.style.transform = `scale(${scale})`;
+
+        let imageExpandedLink = document.createElement('a');
+        imageExpandedLink.appendChild(imageExpanded);
+        imageExpandedLink.style = 'width:inherit;height:inherit';
+        imageExpandedLink.href = blobLink;
+        imageExpandedLink.target = "_blank";
+        imageExpandedLink.onclick = function(e) { e.preventDefault(); };
+
+        // Зум картинки
+        let wheelListener = function(e) {
+            e.preventDefault();
+            scale += e.deltaY * -0.005;
+            scale = Math.min(Math.max(initScale*0.1, scale), initScale*10);
+            imageExpandedDiv.style.transform = `scale(${scale})`;
+        };
+        imageExpanded.onwheel = wheelListener;
+    
+        let initialImageLeft = 0;
+        let initialImageTop = 0;
+
+        // Захват картинки для перетаскивания
+        imageExpandedDiv.onmousedown = function(e) {
+            e.preventDefault();
+            initialImageLeft = imageExpandedDiv.style.left;
+            initialImageTop = imageExpandedDiv.style.top;
+    
+            let offsetX = e.clientX - parseInt(imageExpandedDiv.style.left.slice(0, imageExpandedDiv.style.left.length-2));
+            let offsetY = e.clientY - parseInt(imageExpandedDiv.style.top.slice(0, imageExpandedDiv.style.top.length-2));
+
+            // Перетаскивание
+            let mousemoveListener = function(e) {
+                let topAmount = e.clientY - offsetY;
+                imageExpandedDiv.style.top = topAmount + 'px';
+                let leftAmount = e.clientX - offsetX;
+                imageExpandedDiv.style.left = leftAmount + 'px';
+            };
+            window.addEventListener('mousemove', mousemoveListener);
+
+            // Отпускание картинки
+            window.addEventListener('mouseup', function(e) {
+                e.preventDefault();
+                window.removeEventListener('mousemove', mousemoveListener);
+                if (initialImageLeft == imageExpandedDiv.style.left &&
+                    initialImageTop == imageExpandedDiv.style.top && e.button == 0) {
+                    imageExpandedDiv.remove();
+                }
+            });
+        };
+        imageExpandedDiv.appendChild(imageExpandedLink);
+        document.getElementsByTagName('body')[0].appendChild(imageExpandedDiv);
+    }
+
+    imagePreviewLink.onclick = imagePreviewClickListener;
+    return imagePreviewLink;
+}
+
 function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
     function createDownloadLink(name, text, blobLink) {
         let downloadLink = document.createElement('a');
@@ -4262,16 +4361,6 @@ function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
         downloadLink.innerText = text;
         downloadLink.href = blobLink;
         return downloadLink;
-    }
-    function createImageLink(blobLink) {
-        let imageLink = document.createElement('a');
-        let image = document.createElement('img');
-        image.src = blobLink;
-        imageLink.appendChild(image);
-        image.style = 'max-width: 200px;';
-        imageLink.href = blobLink;
-        imageLink.target = "_blank";
-        return imageLink;
     }
     function isImage(mime) {
         return mime && (mime.endsWith('/jpeg') ||
@@ -4300,27 +4389,32 @@ function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
         link.innerText = filename;
         link.href = blobLink;
         fileDiv.appendChild(link);
-        fileDiv.innerHTML += ' ';
-
+        fileDiv.appendChild(document.createTextNode(' '));
         fileDiv.appendChild(createDownloadLink(files[i].name, ' \u2193', blobLink));
+
         if (isPreview && isImage(files[i].data.type)) {
             fileDiv.appendChild(document.createElement('br'));
-            fileDiv.appendChild(createImageLink(blobLink));
+            fileDiv.appendChild(createImagePreview(blobLink));
         }
         fileLinksDiv.appendChild(fileDiv);
 
         if (i < normalFilesCount - 1) {
-            fileLinksDiv.innerHTML += ', ';
+            fileLinksDiv.appendChild(document.createTextNode(', '));
         }
     }
     if (hasSkippedFiles > 0) {
-        let allFiles = createDownloadLink(`all_files_${postId}.zip`,
-            'скачать все', URL.createObjectURL(files[files.length - 1].data)).outerHTML;
-        fileLinksDiv.innerHTML = `Файлы (${allFiles}): ${isPreview ? '<br>' : ''}${fileLinksDiv.innerHTML}`;
-        fileLinksDiv.innerHTML += ` (некоторые файлы пропущены)`;
+        let allFilesLink = createDownloadLink(`all_files_${postId}.zip`, 'скачать все',
+            URL.createObjectURL(files[files.length - 1].data));
+
+        fileLinksDiv.insertAdjacentText('beforeend', ' (некоторые файлы пропущены)');
+        if (isPreview) fileLinksDiv.insertAdjacentElement('afterbegin', document.createElement('br'));
+        fileLinksDiv.insertAdjacentText('afterbegin', '): ');
+        fileLinksDiv.insertAdjacentElement('afterbegin', allFilesLink);
+        fileLinksDiv.insertAdjacentText('afterbegin', 'Файлы (');
     }
     else {
-        fileLinksDiv.innerHTML = `Файлы: ${isPreview ? '<br>' : ''}${fileLinksDiv.innerHTML}`;
+        if (isPreview) fileLinksDiv.insertAdjacentElement('afterbegin', document.createElement('br'));
+        fileLinksDiv.insertAdjacentText('afterbegin', 'Файлы: ');
     }
     return fileLinksDiv;
 }
