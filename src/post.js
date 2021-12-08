@@ -494,6 +494,8 @@ function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
         fileDiv.appendChild(link);
         fileDiv.appendChild(document.createTextNode(' '));
         fileDiv.appendChild(createDownloadLink(files[i].name, ' \u2193', blobLink));
+        fileDiv.appendChild(document.createElement('br'));
+        fileDiv.appendChild(document.createTextNode(`[${Utils.getHumanReadableSize(files[i].data.size)}]`));
 
         if (isPreview && isImage(files[i].data.type)) {
             fileDiv.appendChild(document.createElement('br'));
@@ -511,7 +513,7 @@ function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
 
         fileLinksDiv.insertAdjacentText('beforeend', ' (некоторые файлы пропущены)');
         if (isPreview) fileLinksDiv.insertAdjacentElement('afterbegin', document.createElement('br'));
-        fileLinksDiv.insertAdjacentText('afterbegin', '): ');
+        fileLinksDiv.insertAdjacentText('afterbegin', ` [${Utils.getHumanReadableSize(files[files.length - 1].data.size)}]): `);
         fileLinksDiv.insertAdjacentElement('afterbegin', allFilesLink);
         fileLinksDiv.insertAdjacentText('afterbegin', 'Файлы (');
     }

@@ -3070,6 +3070,8 @@ function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
         fileDiv.appendChild(link);
         fileDiv.appendChild(document.createTextNode(' '));
         fileDiv.appendChild(createDownloadLink(files[i].name, ' \u2193', blobLink));
+        fileDiv.appendChild(document.createElement('br'));
+        fileDiv.appendChild(document.createTextNode(`[${Utils.getHumanReadableSize(files[i].data.size)}]`));
 
         if (isPreview && isImage(files[i].data.type)) {
             fileDiv.appendChild(document.createElement('br'));
@@ -3087,7 +3089,7 @@ function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
 
         fileLinksDiv.insertAdjacentText('beforeend', ' (некоторые файлы пропущены)');
         if (isPreview) fileLinksDiv.insertAdjacentElement('afterbegin', document.createElement('br'));
-        fileLinksDiv.insertAdjacentText('afterbegin', '): ');
+        fileLinksDiv.insertAdjacentText('afterbegin', ` [${Utils.getHumanReadableSize(files[files.length - 1].data.size)}]): `);
         fileLinksDiv.insertAdjacentElement('afterbegin', allFilesLink);
         fileLinksDiv.insertAdjacentText('afterbegin', 'Файлы (');
     }
@@ -3565,6 +3567,20 @@ function shuffleArray(array, steps, rndSource) {
     }
 }
 
+function getHumanReadableSize(bytes) {
+    var thresh = 1024;
+    if(Math.abs(bytes) < thresh) {
+        return bytes + ' B';
+    }
+    var units = ['KB','MB','GB','TB','PB','EB','ZB','YB'];
+    var u = -1;
+    do {
+        bytes /= thresh;
+        ++u;
+    } while(Math.abs(bytes) >= thresh && u < units.length - 1);
+    return bytes.toFixed(1)+' '+units[u];
+}
+
 function trace(s) {
     console.log(s);
 }
@@ -3576,6 +3592,7 @@ module.exports.arrayToBase64 = arrayToBase64
 module.exports.arrayToBase64url = arrayToBase64url
 module.exports.base64urlToArray = base64urlToArray
 module.exports.shuffleArray = shuffleArray
+module.exports.getHumanReadableSize = getHumanReadableSize
 module.exports.trace = trace
 
 },{}]},{},[11]);

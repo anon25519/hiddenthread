@@ -643,12 +643,7 @@ function createInterface() {
             border-right: 3px solid #${storage.postsColor ? storage.postsColor : 'F00000'};
         }
     `
-    if (style.styleSheet) {
-        // This is required for IE8 and below.
-        style.styleSheet.cssText = css;
-    } else {
-        style.appendChild(document.createTextNode(css));
-    }
+    style.appendChild(document.createTextNode(css));
     document.head.appendChild(style)
 
     // render
@@ -884,24 +879,10 @@ function getPostsToScanFromHtml() {
 }
 
 
-function getHumanReadableSize(bytes) {
-    var thresh = 1024;
-    if(Math.abs(bytes) < thresh) {
-        return bytes + ' B';
-    }
-    var units = ['KB','MB','GB','TB','PB','EB','ZB','YB'];
-    var u = -1;
-    do {
-        bytes /= thresh;
-        ++u;
-    } while(Math.abs(bytes) >= thresh && u < units.length - 1);
-    return bytes.toFixed(1)+' '+units[u];
-}
-
 async function getCacheSizeReadable() {
     try {
         let size = await HtCache.getCacheSize();
-        return getHumanReadableSize(size);
+        return Utils.getHumanReadableSize(size);
     } catch (e) {}
     return "???";
 }
@@ -909,7 +890,7 @@ async function getCacheSizeReadable() {
 async function getIdbUsageReadable() {
     try {
         const quota = await navigator.storage.estimate();
-        return getHumanReadableSize(quota.usage);
+        return Utils.getHumanReadableSize(quota.usage);
     } catch (e) {}
     return "???";
 }
