@@ -3154,14 +3154,16 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     if (loadedPost.isPrivate) {
         postMetadata.appendChild(createElementFromHTML('<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом</i></div>'));
     }
-    let timeString = (new Date(loadedPost.timestamp * 1000))
+    let tzOffset = (new Date()).getTimezoneOffset() * 60;
+    let timeString = (new Date((loadedPost.timestamp - tzOffset) * 1000))
         .toISOString().replace('T', ' ').replace(/\.\d+Z/g, '');
     let d = clearPost.getElementsByClassName('post__time')[0].textContent.split(' ');
     let postDateMs = Date.parse(`20${d[0].split('/')[2]}-${d[0].split('/')[1]}-${d[0].split('/')[0]}T${d[2]}Z`);
     if (Math.abs(postDateMs/1000 - loadedPost.timestamp) > 24*3600) {
         timeString += ' <span style="color:red;">(неверное время поста!)</span>';
     }
-    postMetadata.appendChild(createElementFromHTML('<div>Дата создания скрытопоста (UTC): ' + timeString + '</div>'));
+    let tzName = (new Date()).toLocaleDateString(undefined, { timeZoneName: 'short' }).split(',')[1].trim();
+    postMetadata.appendChild(createElementFromHTML(`<div>Дата создания скрытопоста (${tzName}): ${timeString}</div>`));
     postMetadata.appendChild(Post.createFileLinksDiv(unpackedData.files,
         unpackedData.hasSkippedFiles, postId, !storage.isPreviewDisabled));
 
