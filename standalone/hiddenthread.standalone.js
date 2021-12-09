@@ -2726,15 +2726,29 @@ async function createHiddenPostImpl(container, message, files, password, private
 }
 
 async function getMimeType(blob) {
-    let data = new Uint8Array(await blob.slice(0,12).arrayBuffer());
-    if (data[0]==0x89 && data[1]==0x50 && data[2]==0x4E && data[3]==0x47) {
-        return 'image/png';
-    } else if (data[0]==0xFF && data[1]==0xD8 && data[2]==0xFF) {
-        return 'image/jpeg';
-    } else if (data[0]==0x52 && data[1]==0x49 && data[2]==0x46 && data[3]==0x46 &&
-        data[8]==0x57 && data[9]==0x45 && data[10]==0x42 && data[11]==0x50) {
-        return 'image/webp';
+    function check(a, b) {
+        for (let i = 0; i < a.length; i++) {
+            if (a[i] !== b[i]) return false;
+        }
+        return true;
     }
+    let data = new Uint8Array(await blob.slice(0,12).arrayBuffer());
+    if (check([0x89, 0x50, 0x4E, 0x47], data)) {
+        return 'image/png';
+    } else if (check([0xFF, 0xD8, 0xFF], data)) {
+        return 'image/jpeg';
+    } else if (check([0x52, 0x49, 0x46, 0x46], data) && check([0x57, 0x45, 0x42, 0x50], data.slice(8, 12))) {
+        return 'image/webp';
+    } else if (check([0x49, 0x44, 0x33], data)) {
+        return 'audio/mpeg';
+    } else if (check([0x47, 0x49, 0x46], data)) {
+        return 'image/gif';
+    } else if (check([0x66, 0x74, 0x79, 0x70], data.slice(4, 8))) {
+        return 'video/mp4';
+    } else if (check([0x1A, 0x45, 0xDF, 0xA3], data)) {
+        return 'video/webm';
+    }
+    return '';
 }
 
 async function unzipPostData(zipData) {
@@ -3042,7 +3056,7 @@ function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
         return downloadLink;
     }
     function isImage(mime) {
-        return mime && (mime.endsWith('/jpeg') ||
+        return !!mime && (mime.endsWith('/jpeg') ||
             mime.endsWith('/png') ||
             mime.endsWith('/webp'));
     }
@@ -3063,17 +3077,23 @@ function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
                 filename.substring(filename.length - 5);
         }
         let blobLink = URL.createObjectURL(files[i].data);
-        let link = document.createElement('a');
-        link.target = "_blank";
-        link.innerText = filename;
-        link.href = blobLink;
-        fileDiv.appendChild(link);
+
+        // Если тип поддерживается, создаем ссылку для открытия файла
+        // в новой вкладке, иначе только ссылку для скачивания
+        let mime = files[i].data.type;
+        if (mime) {
+            let link = document.createElement('a');
+            link.target = "_blank";
+            link.innerText = filename;
+            link.href = blobLink;
+            fileDiv.appendChild(link);
+        }
         fileDiv.appendChild(document.createTextNode(' '));
-        fileDiv.appendChild(createDownloadLink(files[i].name, ' \u2193', blobLink));
+        fileDiv.appendChild(createDownloadLink(files[i].name, `${mime ? '' : filename} \u2193`, blobLink));
         fileDiv.appendChild(document.createElement('br'));
         fileDiv.appendChild(document.createTextNode(`[${Utils.getHumanReadableSize(files[i].data.size)}]`));
 
-        if (isPreview && isImage(files[i].data.type)) {
+        if (isPreview && isImage(mime)) {
             fileDiv.appendChild(document.createElement('br'));
             fileDiv.appendChild(createImagePreview(blobLink));
         }
