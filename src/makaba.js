@@ -434,6 +434,7 @@ function reloadHiddenPosts() {
 
 async function loadAndRenderPost(postId, url, password, privateKey) {
     let response = await fetch(url);
+    if (!response.ok) throw new Error(`fetch not ok, url: ${url}`);
     let imgArrayBuffer = await response.arrayBuffer();
 
     let imgId = getImgName(url);
@@ -987,11 +988,8 @@ if (!isMakaba()) return;
 if (!storage.isDebugLogEnabled)
     Utils.trace = function() {}
 
-try {
-    HtCache.initCacheStorage(storage.maxCacheSize ? storage.maxCacheSize : 0);
-} catch (e) {
-    Utils.trace('HiddenThread: initCacheStorage error: ' + e);
-}
+HtCache.initCacheStorage(storage.maxCacheSize ? storage.maxCacheSize : 0);
+
 createInterface();
 CheckVersion();
 

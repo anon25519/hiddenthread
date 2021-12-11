@@ -333,7 +333,7 @@ async function getImageData(imgArrayBuffer) {
             resolve();
         }
         img.onerror = function(event) {
-            reject();
+            reject(event);
         }
         img.src = URL.createObjectURL(imgBlob);
     });
