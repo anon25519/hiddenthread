@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.5
+// @version      0.5.1
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -2882,7 +2882,7 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5";
+const CURRENT_VERSION = "0.5.1";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
@@ -3312,15 +3312,14 @@ function reloadHiddenPosts() {
 
 
 async function loadAndRenderPost(postId, url, password, privateKey) {
-    let img = new Image();
-    img.src = url;
-    await img.decode();
+    let response = await fetch(url);
+    let imgArrayBuffer = await response.arrayBuffer();
 
     let imgId = getImgName(url);
     document.getElementById("imagesLoadedCount").textContent =
         parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
 
-    let loadedPost = await Post.loadPostFromImage(img, password, privateKey);
+    let loadedPost = await Post.loadPostFromImage(imgArrayBuffer, password, privateKey);
 
     if (!loadedPost)
         return loadedPost;
@@ -4193,15 +4192,43 @@ async function decryptData(password, imageArray, dataOffset) {
     };
 }
 
-// Возвращает объект скрытого поста
-async function loadPostFromImage(img, password, privateKey) {
+async function getImageData(imgArrayBuffer) {
+    let imgUint8Array = new Uint8Array(imgArrayBuffer);
+
+    // Если есть sRGB chunk, то принудительно ставим "rendering intent" в "AbsoluteColorimetric",
+    // чтобы при чтении значений пикселей возвращалось истинное значение цвета
+    // https://bugzilla.mozilla.org/show_bug.cgi?id=867594
+    if (imgUint8Array[0x25] == 0x73 && imgUint8Array[0x26] == 0x52 &&
+        imgUint8Array[0x27] == 0x47 && imgUint8Array[0x28] == 0x42)
+    {
+        imgUint8Array[0x29] = 3;
+    }
+
+    let imgBlob = new Blob([imgUint8Array], {'type': 'image/png'});
+    const img = new Image();
+    await new Promise(function(resolve, reject) {
+        img.onload = function(event) {
+            URL.revokeObjectURL(event.target.src);
+            resolve();
+        }
+        img.onerror = function(event) {
+            reject();
+        }
+        img.src = URL.createObjectURL(imgBlob);
+    });
+
     let canvas = document.createElement('canvas');
     canvas.width = img.width;
     canvas.height = img.height;
     let ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+// Возвращает объект скрытого поста
+async function loadPostFromImage(imgArrayBuffer, password, privateKey) {
+    let imageData = await getImageData(imgArrayBuffer);
 
     // Пробуем расшифровать как публичный пост
     let isPrivate = false;

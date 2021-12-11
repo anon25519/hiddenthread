@@ -70,7 +70,6 @@ browserify src/standalone.js > standalone/hiddenthread.standalone.js
 ```
 
 ### Известные ошибки
-* В браузере `Firefox` значения отдельных пикселей на канвасе могут не соответствовать значениям на изображении, из-за чего некоторые контейнеры не распаковываются корректно ([пример на jsfiddle](https://jsfiddle.net/vgwqe2ok/6))
 * В браузере `LibreWolf` ошибка `Blocked https://2ch.hk/.../res/...html from extracting canvas data because no user input was detected.` Для исправления зайдите в `about:config` и измените параметр `privacy.resistFingerprinting.autoDeclineNoUserInputCanvasPrompts` на `false`.
 
 ### История версий

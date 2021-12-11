@@ -179,25 +179,21 @@ function loadPost() {
 
     var fr = new window.FileReader();
     fr.onload = (function () {
-        var img = new Image();
-        img.onload = (function () {
-            Post.loadPostFromImage(img,
-                document.getElementById('hiddenThreadPasswordDecode').value,
-                document.getElementById('privateKeyDecode').value)
-                .then(async function (loadedPost) {
-                    Utils.trace(loadedPost);
-                    if (loadedPost == null)
-                    {
-                        alert('Не удалось декодировать скрытопост - неверный пароль или ключ, либо это обычная картинка')
-                        return;
-                    }
-                    let unpackedData = await Post.unzipPostData(loadedPost.zipData);
-                    renderHiddenPost(loadedPost, unpackedData);
-                });
-        });
-        img.src = fr.result;
+        Post.loadPostFromImage(fr.result,
+            document.getElementById('hiddenThreadPasswordDecode').value,
+            document.getElementById('privateKeyDecode').value)
+            .then(async function (loadedPost) {
+                Utils.trace(loadedPost);
+                if (loadedPost == null)
+                {
+                    alert('Не удалось декодировать скрытопост - неверный пароль или ключ, либо это обычная картинка')
+                    return;
+                }
+                let unpackedData = await Post.unzipPostData(loadedPost.zipData);
+                renderHiddenPost(loadedPost, unpackedData);
+            });
     });
-    fr.readAsDataURL(imgFile);
+    fr.readAsArrayBuffer(imgFile);
 
 }
 

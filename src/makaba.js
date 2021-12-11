@@ -3,7 +3,7 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5";
+const CURRENT_VERSION = "0.5.1";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
@@ -433,15 +433,14 @@ function reloadHiddenPosts() {
 
 
 async function loadAndRenderPost(postId, url, password, privateKey) {
-    let img = new Image();
-    img.src = url;
-    await img.decode();
+    let response = await fetch(url);
+    let imgArrayBuffer = await response.arrayBuffer();
 
     let imgId = getImgName(url);
     document.getElementById("imagesLoadedCount").textContent =
         parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
 
-    let loadedPost = await Post.loadPostFromImage(img, password, privateKey);
+    let loadedPost = await Post.loadPostFromImage(imgArrayBuffer, password, privateKey);
 
     if (!loadedPost)
         return loadedPost;
