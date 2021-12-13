@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.5.1
+// @version      0.5.2
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -2882,7 +2882,7 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5.1";
+const CURRENT_VERSION = "0.5.2";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
@@ -2912,6 +2912,14 @@ function createElementFromHTML(htmlString) {
 
 function getImgName(url) {
     return url.split('/').pop().split('.')[0];
+}
+
+function getContainerName() {
+    let placeholder = document.getElementById('htContainerName').placeholder;
+    let value = document.getElementById('htContainerName').value;
+    let fileName = value || placeholder;
+
+    return fileName.endsWith('.png') ? fileName : `${fileName}.png`
 }
 
 async function createHiddenPost() {
@@ -2972,7 +2980,7 @@ async function createHiddenPost() {
         });
     });
     let blob = await toBlobPromise;
-    blob.name = getFileName();
+    blob.name = getContainerName();
 
     // Вставляем картинку в форму для отображения пользователю
     let img = document.createElement('img');
@@ -3091,7 +3099,7 @@ function convertToHtml(text) {
     for (let i = 0; i < text.length; i++) {
         for (let j = 0; j < tags.length; j++) {
             const t = tags[j];
-            if (text.substring(i, i + t.open.length) === t.open) {
+            if (text.substring(i, i + t.open.length).toLowerCase() === t.open) {
                 let c = getClosingTagIndex(text, i, t);
                 if (c == -1) {
                     continue;
@@ -3113,12 +3121,12 @@ function getClosingTagIndex(text, i, tag) {
     i += tag.open.length;
     let skip = 0;
     for (; i < text.length; i++) {
-        if (text.substring(i, i + tag.open.length) === tag.open) {
+        if (text.substring(i, i + tag.open.length).toLowerCase() === tag.open) {
             skip += 1;
             continue;
         }
 
-        if (text.substring(i, i + tag.close.length) === tag.close) {
+        if (text.substring(i, i + tag.close.length).toLowerCase() === tag.close) {
             skip -= 1;
             if (skip == -1) {
                 return i;
@@ -3313,6 +3321,7 @@ function reloadHiddenPosts() {
 
 async function loadAndRenderPost(postId, url, password, privateKey) {
     let response = await fetch(url);
+    if (!response.ok) throw new Error(`fetch not ok, url: ${url}`);
     let imgArrayBuffer = await response.arrayBuffer();
 
     let imgId = getImgName(url);
@@ -3383,16 +3392,6 @@ async function loadPost(postId, url, password, privateKey, passwordHash, private
     }
 }
 
-function getFileName() {
-    var fileName = document.getElementById('fileName').value;
-
-    if (!fileName) {
-        return "image.png";
-    }
-
-    return fileName.endsWith('.png') ? fileName : `${fileName}.png`
-}
-
 function CheckVersion() {
     var request = new XMLHttpRequest();
     request.open("GET", VERSION_SOURCE);
@@ -3432,6 +3431,9 @@ function createInterface() {
             </div>
             <div id="hiddenThreadForm" style="display: ${storage.hidePostForm ? 'none' : ''}">
                 <div style="padding:5px;">
+                    <input id="htClearFormButton" type="button" style="padding:5px;margin:auto;display:block;color:red" value="Очистить форму" />
+                </div>
+                <div style="padding:5px;">
                     <span style="padding-right: 5px;">Пароль:</span>
                     <input placeholder="Без пароля" id="hiddenThreadPassword" />
                     <input id="reloadHiddenPostsButton" type="button" style="padding: 5px;" value="Загрузить скрытопосты" />
@@ -3458,7 +3460,13 @@ function createInterface() {
                     <input id="hiddenContainerInput" type="file" multiple="true" />
                     <br>
                     <span style="margin-right: 5px">Имя картинки:</span>
-                    <input placeholder="image.png" id="fileName">
+                    <div class="selectbox">
+                    <select id="htContainerNameSelect" class="input select" style="max-width:15ch">
+                        <option>image.png</option>
+                        <option>unixtime</option>
+                    </select>
+                    </div>
+                    <input id="htContainerName">
                     <br>
                     <input id="hiddenFilesClearButton" class="mt-1" type="button" value="Очистить список файлов" />
                     <input id="hiddenContainerClearButton" class="mt-1" type="button" value="Очистить список контейнеров" />
@@ -3613,6 +3621,36 @@ function createInterface() {
         formEl.style.display = storage.hidePostForm
             ? "none"
             : ""
+    }
+
+    document.getElementById('htContainerNameSelect').onclick = function () {
+        function getRandomInRange(min, max) {
+            return Math.floor(Math.random() * (max - min) + min);
+        }
+        document.getElementById('htContainerName').value = '';
+        if (this.selectedIndex == 0) {
+            document.getElementById('htContainerName').placeholder = 'image.png';
+        } else {
+            document.getElementById('htContainerName').placeholder = `${getRandomInRange(14000000000000, Date.now()*10)}.png`;
+        }
+        setStorage({ containerName: this.selectedIndex });
+    }
+    document.getElementById('htContainerNameSelect').selectedIndex = storage.containerName ? storage.containerName : 0;
+    document.getElementById('htContainerNameSelect').click();
+
+    document.getElementById('htClearFormButton').onclick = function () {
+        document.getElementById('hiddenPostInput').value = '';
+        document.getElementById('hiddenFilesInput').value = null;
+        let dollchanThumbs = document.getElementsByClassName('de-hiddencontainer-thumb');
+        let containerIdList = [];
+        for (let thumb of dollchanThumbs) {
+            containerIdList.push(thumb.id.split('-').pop());
+        }
+        for (let id of containerIdList) {
+            document.getElementById(`de-hiddencontainer-input-${id}`).value = null;
+            document.getElementById(`de-hiddencontainer-input-${id}`).remove();
+            document.getElementById(`de-hiddencontainer-thumb-${id}`).remove();
+        }
     }
 
     document.getElementById('reloadHiddenPostsButton').onclick = reloadHiddenPosts;
@@ -3866,11 +3904,8 @@ if (!isMakaba()) return;
 if (!storage.isDebugLogEnabled)
     Utils.trace = function() {}
 
-try {
-    HtCache.initCacheStorage(storage.maxCacheSize ? storage.maxCacheSize : 0);
-} catch (e) {
-    Utils.trace('HiddenThread: initCacheStorage error: ' + e);
-}
+HtCache.initCacheStorage(storage.maxCacheSize ? storage.maxCacheSize : 0);
+
 createInterface();
 CheckVersion();
 
@@ -4212,7 +4247,7 @@ async function getImageData(imgArrayBuffer) {
             resolve();
         }
         img.onerror = function(event) {
-            reject();
+            reject(event);
         }
         img.src = URL.createObjectURL(imgBlob);
     });
