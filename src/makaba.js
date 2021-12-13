@@ -212,7 +212,7 @@ function convertToHtml(text) {
     for (let i = 0; i < text.length; i++) {
         for (let j = 0; j < tags.length; j++) {
             const t = tags[j];
-            if (text.substring(i, i + t.open.length) === t.open) {
+            if (text.substring(i, i + t.open.length).toLowerCase() === t.open) {
                 let c = getClosingTagIndex(text, i, t);
                 if (c == -1) {
                     continue;
@@ -234,12 +234,12 @@ function getClosingTagIndex(text, i, tag) {
     i += tag.open.length;
     let skip = 0;
     for (; i < text.length; i++) {
-        if (text.substring(i, i + tag.open.length) === tag.open) {
+        if (text.substring(i, i + tag.open.length).toLowerCase() === tag.open) {
             skip += 1;
             continue;
         }
 
-        if (text.substring(i, i + tag.close.length) === tag.close) {
+        if (text.substring(i, i + tag.close.length).toLowerCase() === tag.close) {
             skip -= 1;
             if (skip == -1) {
                 return i;
@@ -554,6 +554,9 @@ function createInterface() {
             </div>
             <div id="hiddenThreadForm" style="display: ${storage.hidePostForm ? 'none' : ''}">
                 <div style="padding:5px;">
+                    <input id="htClearFormButton" type="button" style="padding:5px;margin:auto;display:block;color:red" value="Очистить форму" />
+                </div>
+                <div style="padding:5px;">
                     <span style="padding-right: 5px;">Пароль:</span>
                     <input placeholder="Без пароля" id="hiddenThreadPassword" />
                     <input id="reloadHiddenPostsButton" type="button" style="padding: 5px;" value="Загрузить скрытопосты" />
@@ -735,6 +738,11 @@ function createInterface() {
         formEl.style.display = storage.hidePostForm
             ? "none"
             : ""
+    }
+
+    document.getElementById('htClearFormButton').onclick = function () {
+        document.getElementById('hiddenPostInput').value = '';
+        document.getElementById('hiddenFilesInput').value = null;
     }
 
     document.getElementById('reloadHiddenPostsButton').onclick = reloadHiddenPosts;
