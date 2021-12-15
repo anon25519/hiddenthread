@@ -3,7 +3,7 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5.2";
+const CURRENT_VERSION = "0.5.3";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
@@ -502,7 +502,8 @@ async function loadPost(postId, url, password, privateKey, passwordHash, private
             cachedPost.wrongPrivateKeyHashes.indexOf(privateKeyHash) == -1)) {
             let loadedPost = await loadAndRenderPost(postId, url, password, privateKey);
             try {
-                await HtCache.updateCache(imgId, loadedPost, passwordHash, privateKeyHash);
+                if (!storage.maxCachedPostSize || (loadedPost.zipData.size < storage.maxCachedPostSize * 1024))
+                    await HtCache.updateCache(imgId, loadedPost, passwordHash, privateKeyHash);
             } catch (e) {}
         }
         // Если в кэше скрытопост, выводим его
@@ -527,7 +528,8 @@ async function loadPost(postId, url, password, privateKey, passwordHash, private
         // выводим его (если удалось декодировать), обновляем кэш
         let loadedPost = await loadAndRenderPost(postId, url, password, privateKey);
         try {
-            await HtCache.updateCache(imgId, loadedPost, passwordHash, privateKeyHash);
+            if (!storage.maxCachedPostSize || (loadedPost.zipData.size < storage.maxCachedPostSize * 1024))
+                await HtCache.updateCache(imgId, loadedPost, passwordHash, privateKeyHash);
         } catch (e) {}
     }
 }
@@ -597,7 +599,6 @@ function createInterface() {
                     <input id="hiddenFilesInput" type="file" multiple="true" />
                     <br>
                     <input id="hiddenFilesClearButton" class="mt-1" type="button" value="Очистить список файлов" />
-                    <input id="hiddenContainerClearButton" class="mt-1" type="button" value="Очистить список контейнеров" />
                 </div>
                 <div style="padding: 5px;">
                     <div style="font-size:large;text-align:center;">Подписать пост</div>
@@ -705,6 +706,7 @@ function createInterface() {
                 <div><input id="htIsPreviewDisabled" type="checkbox"> <span>Отключить превью картинок в скрытопостах</span></div>
                 <div><input id="htIsFormClearEnabled" type="checkbox"> <span>Включить очистку полей при создании картинки</span></div>
                 <div><input id="htPostsColor" maxlength="6" size="6"> <span>Цвет выделения скрытопостов (в hex)</span></div>
+                <div><input id="htMaxCachedPostSize" type="number" min="0" step="1" size="12"> <span>Макс. размер поста в кэше, Кб</span></div>
                 <div><input id="htMaxCacheSize" type="number" min="0" step="1" size="12"> <span>Макс. размер кэша, Мб</span></div>
                 <div>Текущий размер кэша: <span id="htCacheSize">???</span></div>
                 <div><button id="htClearCache">Очистить кэш</button></div>
@@ -725,6 +727,7 @@ function createInterface() {
         document.getElementById("htIsPreviewDisabled").checked = storage.isPreviewDisabled;
         document.getElementById("htIsFormClearEnabled").checked = storage.isFormClearEnabled;
         document.getElementById("htPostsColor").value = storage.postsColor ? storage.postsColor : 'F00000';
+        document.getElementById("htMaxCachedPostSize").value = storage.maxCachedPostSize ? storage.maxCachedPostSize : 0;
         document.getElementById("htMaxCacheSize").value = storage.maxCacheSize ? storage.maxCacheSize : 0;
         settingsWindow.style.display = settingsWindow.style.display == 'none' ? 'block' : 'none';
     }
@@ -737,6 +740,8 @@ function createInterface() {
         setStorage({ isPreviewDisabled: document.getElementById("htIsPreviewDisabled").checked });
         setStorage({ isFormClearEnabled: document.getElementById("htIsFormClearEnabled").checked });
         setStorage({ postsColor: document.getElementById("htPostsColor").value });
+        let maxCachedPostSize = parseInt(document.getElementById("htMaxCachedPostSize").value);
+        setStorage({ maxCachedPostSize: maxCachedPostSize ? maxCachedPostSize : 0 });
         let maxCacheSize = parseInt(document.getElementById("htMaxCacheSize").value);
         setStorage({ maxCacheSize: maxCacheSize ? maxCacheSize : 0 });
         document.getElementById('hiddenThreadSettingsWindow').style.display = 'none';
@@ -820,9 +825,7 @@ function createInterface() {
     document.getElementById('hiddenFilesClearButton').onclick = function () {
         document.getElementById('hiddenFilesInput').value = null;
     }
-    document.getElementById('hiddenContainerClearButton').onclick = function () {
-        document.getElementById('hiddenContainerInput').value = null;
-    }
+
     let createHiddenPostButton = document.getElementById('createHiddenPostButton');
     createHiddenPostButton.onclick = async function () {
         let oldText = createHiddenPostButton.value;

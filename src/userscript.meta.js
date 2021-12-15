@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.5.2
+// @version      0.5.3
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*

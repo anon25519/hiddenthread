@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.5.2
+// @version      0.5.3
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -2882,7 +2882,7 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5.2";
+const CURRENT_VERSION = "0.5.3";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
@@ -2922,11 +2922,39 @@ function getContainerName() {
     return fileName.endsWith('.png') ? fileName : `${fileName}.png`
 }
 
+function getContainerLocalFile() {
+    let container = null;
+    let containers = document.getElementById('hiddenContainerInput').files;
+    if (containers.length == 0) {
+        alert("Выберите файл!");
+        return null;
+    }
+
+    let containersNum = new Array(containers.length);
+    for (let i = 0; i < containersNum.length; i++) containersNum[i] = i;
+    Utils.shuffleArray(containersNum, containersNum.length, Math);
+
+    for (let num of containersNum) {
+        if (containers[num].type == 'image/png' ||
+            containers[num].type == 'image/jpeg') {
+            container = containers[num];
+            break;
+        }
+    }
+
+    if (!container) {
+        alert(containers.length == 1 ?
+            "Выбранный файл должен быть JPG или PNG картинкой!" :
+            "Хотя бы один из выбранных файлов должен быть JPG или PNG картинкой!");
+        return null;
+    }
+
+    return container;
+}
+
 async function createHiddenPost() {
     let imageContainerDiv = document.getElementById('imageContainerDiv');
     imageContainerDiv.innerHTML = '';
-
-    let containers = document.getElementById('hiddenContainerInput').files;
 
     let maxDataRatio = 0;
     let isDownscaleAllowed = document.getElementById('isDownscaleAllowed').checked;
@@ -2935,28 +2963,13 @@ async function createHiddenPost() {
     }
 
     let container = null;
-    if (containers.length > 0) {
-        let containersNum = new Array(containers.length);
-        for (let i = 0; i < containersNum.length; i++) containersNum[i] = i;
-        Utils.shuffleArray(containersNum, containersNum.length, Math);
-
-        for (let num of containersNum) {
-            if (containers[num].type == 'image/png' ||
-                containers[num].type == 'image/jpeg') {
-                container = containers[num];
-                break;
-            }
-        }
-    
-        if (!container) {
-            alert(containers.length == 1 ?
-                "Выбранный файл должен быть JPG или PNG картинкой!" :
-                "Хотя бы один из выбранных файлов должен быть JPG или PNG картинкой!");
+    let containerType = document.getElementById('htContainerTypeSelect').selectedIndex;
+    if (containerType == 1) {
+        container = getContainerLocalFile();
+        if (!container)
             return;
-        }
-    }
-    else {
-        // Если не выбрана картинка, создаем пустую 1x1
+    } else if (containerType == 2) {
+        // Для генерации создаем пустую картинку 1x1
         container = new ImageData(new Uint8ClampedArray(4), 1, 1);
         // Если не выбран процент заполнения, заполняем всё
         if (maxDataRatio == 0) maxDataRatio = 1;
@@ -2991,6 +3004,12 @@ async function createHiddenPost() {
     imageContainerDiv.appendChild(createElementFromHTML('<span>Сохрани изображение ниже и вставь в форму отправки, если оно не вставилось автоматически:</span>'));
     imageContainerDiv.appendChild(document.createElement('br'));
     imageContainerDiv.appendChild(img);
+
+    imageContainerDiv.appendChild(document.createElement('br'));
+    imageContainerDiv.appendChild(document.createTextNode(
+        `${imageResult.canvas.width}x${imageResult.canvas.height}, ` +
+        `скрыто: ${Utils.getHumanReadableSize(imageResult.len)}, ` +
+        `заполнено пикселей: ${imageResult.percent}%`));
 
     let downloadLink  = document.createElement('a');
     downloadLink.innerText = 'Сохранить картинку'
@@ -3362,7 +3381,8 @@ async function loadPost(postId, url, password, privateKey, passwordHash, private
             cachedPost.wrongPrivateKeyHashes.indexOf(privateKeyHash) == -1)) {
             let loadedPost = await loadAndRenderPost(postId, url, password, privateKey);
             try {
-                await HtCache.updateCache(imgId, loadedPost, passwordHash, privateKeyHash);
+                if (!storage.maxCachedPostSize || (loadedPost.zipData.size < storage.maxCachedPostSize * 1024))
+                    await HtCache.updateCache(imgId, loadedPost, passwordHash, privateKeyHash);
             } catch (e) {}
         }
         // Если в кэше скрытопост, выводим его
@@ -3387,7 +3407,8 @@ async function loadPost(postId, url, password, privateKey, passwordHash, private
         // выводим его (если удалось декодировать), обновляем кэш
         let loadedPost = await loadAndRenderPost(postId, url, password, privateKey);
         try {
-            await HtCache.updateCache(imgId, loadedPost, passwordHash, privateKeyHash);
+            if (!storage.maxCachedPostSize || (loadedPost.zipData.size < storage.maxCachedPostSize * 1024))
+                await HtCache.updateCache(imgId, loadedPost, passwordHash, privateKeyHash);
         } catch (e) {}
     }
 }
@@ -3456,20 +3477,7 @@ function createInterface() {
                     <span>Выбери скрытые файлы: </span>
                     <input id="hiddenFilesInput" type="file" multiple="true" />
                     <br>
-                    <span>Выбери картинку-контейнер (из нескольких берется рандомная): </span>
-                    <input id="hiddenContainerInput" type="file" multiple="true" />
-                    <br>
-                    <span style="margin-right: 5px">Имя картинки:</span>
-                    <div class="selectbox">
-                    <select id="htContainerNameSelect" class="input select" style="max-width:15ch">
-                        <option>image.png</option>
-                        <option>unixtime</option>
-                    </select>
-                    </div>
-                    <input id="htContainerName">
-                    <br>
                     <input id="hiddenFilesClearButton" class="mt-1" type="button" value="Очистить список файлов" />
-                    <input id="hiddenContainerClearButton" class="mt-1" type="button" value="Очистить список контейнеров" />
                 </div>
                 <div style="padding: 5px;">
                     <div style="font-size:large;text-align:center;">Подписать пост</div>
@@ -3499,6 +3507,31 @@ function createInterface() {
                 </div>
                 <div style="padding: 5px;">
                     <div style="font-size:large;text-align:center;">Настройки контейнера</div>
+                    <div>
+                        <span style="margin-right: 5px">Картинка:</span>
+                        <div class="selectbox">
+                        <select id="htContainerTypeSelect" class="input select" style="max-width:25ch">
+                            <option>загрузить случайную</option>
+                            <option>выбрать свою</option>
+                            <option>сгенерировать</option>
+                        </select>
+                        </div>
+                        <div id="htContainerInputDiv">
+                            <span>Выбери файл(ы) (из нескольких берется рандомный): </span>
+                            <input id="hiddenContainerInput" type="file" multiple="true" />
+                            <br><br>
+                        </div>
+                    </div>
+                    <div>
+                        <span style="margin-right: 5px">Имя картинки:</span>
+                        <div class="selectbox">
+                        <select id="htContainerNameSelect" class="input select" style="max-width:15ch">
+                            <option>image.png</option>
+                            <option>unixtime</option>
+                        </select>
+                        </div>
+                        <input id="htContainerName">
+                    </div>
                     <div>Подстраивать разрешение картинки под размер поста: <input id="isDataRatioLimited" type="checkbox"></div>
                     <div id="maxDataRatioDiv" style="display:none">
                     <div>Точное соответствие (картинка может быть уменьшена): <input id="isDownscaleAllowed" type="checkbox"></div>
@@ -3550,7 +3583,9 @@ function createInterface() {
                 <div><input id="htIsDebugLogEnabled" type="checkbox"> <span>Включить debug-лог</span></div>
                 <div><input id="htIsQueueLoadEnabled" type="checkbox"> <span>Включить последовательную загрузку скрытопостов</span></div>
                 <div><input id="htIsPreviewDisabled" type="checkbox"> <span>Отключить превью картинок в скрытопостах</span></div>
+                <div><input id="htIsFormClearEnabled" type="checkbox"> <span>Включить очистку полей при создании картинки</span></div>
                 <div><input id="htPostsColor" maxlength="6" size="6"> <span>Цвет выделения скрытопостов (в hex)</span></div>
+                <div><input id="htMaxCachedPostSize" type="number" min="0" step="1" size="12"> <span>Макс. размер поста в кэше, Кб</span></div>
                 <div><input id="htMaxCacheSize" type="number" min="0" step="1" size="12"> <span>Макс. размер кэша, Мб</span></div>
                 <div>Текущий размер кэша: <span id="htCacheSize">???</span></div>
                 <div><button id="htClearCache">Очистить кэш</button></div>
@@ -3569,7 +3604,9 @@ function createInterface() {
         document.getElementById("htIsDebugLogEnabled").checked = storage.isDebugLogEnabled;
         document.getElementById("htIsQueueLoadEnabled").checked = storage.isQueueLoadEnabled;
         document.getElementById("htIsPreviewDisabled").checked = storage.isPreviewDisabled;
+        document.getElementById("htIsFormClearEnabled").checked = storage.isFormClearEnabled;
         document.getElementById("htPostsColor").value = storage.postsColor ? storage.postsColor : 'F00000';
+        document.getElementById("htMaxCachedPostSize").value = storage.maxCachedPostSize ? storage.maxCachedPostSize : 0;
         document.getElementById("htMaxCacheSize").value = storage.maxCacheSize ? storage.maxCacheSize : 0;
         settingsWindow.style.display = settingsWindow.style.display == 'none' ? 'block' : 'none';
     }
@@ -3580,7 +3617,10 @@ function createInterface() {
         setStorage({ isDebugLogEnabled: document.getElementById("htIsDebugLogEnabled").checked });
         setStorage({ isQueueLoadEnabled: document.getElementById("htIsQueueLoadEnabled").checked });
         setStorage({ isPreviewDisabled: document.getElementById("htIsPreviewDisabled").checked });
+        setStorage({ isFormClearEnabled: document.getElementById("htIsFormClearEnabled").checked });
         setStorage({ postsColor: document.getElementById("htPostsColor").value });
+        let maxCachedPostSize = parseInt(document.getElementById("htMaxCachedPostSize").value);
+        setStorage({ maxCachedPostSize: maxCachedPostSize ? maxCachedPostSize : 0 });
         let maxCacheSize = parseInt(document.getElementById("htMaxCacheSize").value);
         setStorage({ maxCacheSize: maxCacheSize ? maxCacheSize : 0 });
         document.getElementById('hiddenThreadSettingsWindow').style.display = 'none';
@@ -3624,19 +3664,25 @@ function createInterface() {
     }
 
     document.getElementById('htContainerNameSelect').onclick = function () {
-        function getRandomInRange(min, max) {
-            return Math.floor(Math.random() * (max - min) + min);
-        }
         document.getElementById('htContainerName').value = '';
         if (this.selectedIndex == 0) {
             document.getElementById('htContainerName').placeholder = 'image.png';
         } else {
-            document.getElementById('htContainerName').placeholder = `${getRandomInRange(14000000000000, Date.now()*10)}.png`;
+            document.getElementById('htContainerName').placeholder =
+                `${Utils.getRandomInRange(14000000000000, Date.now()*10)}.png`;
         }
         setStorage({ containerName: this.selectedIndex });
     }
     document.getElementById('htContainerNameSelect').selectedIndex = storage.containerName ? storage.containerName : 0;
     document.getElementById('htContainerNameSelect').click();
+
+    document.getElementById('htContainerTypeSelect').onclick = function () {
+        document.getElementById('htContainerInputDiv').style.display = (this.selectedIndex == 1) ?
+            'block' : 'none';
+        setStorage({ containerType: this.selectedIndex });
+    }
+    document.getElementById('htContainerTypeSelect').selectedIndex = storage.containerType ? storage.containerType : 0;
+    document.getElementById('htContainerTypeSelect').click();
 
     document.getElementById('htClearFormButton').onclick = function () {
         document.getElementById('hiddenPostInput').value = '';
@@ -3658,9 +3704,7 @@ function createInterface() {
     document.getElementById('hiddenFilesClearButton').onclick = function () {
         document.getElementById('hiddenFilesInput').value = null;
     }
-    document.getElementById('hiddenContainerClearButton').onclick = function () {
-        document.getElementById('hiddenContainerInput').value = null;
-    }
+
     let createHiddenPostButton = document.getElementById('createHiddenPostButton');
     createHiddenPostButton.onclick = async function () {
         let oldText = createHiddenPostButton.value;
@@ -3668,8 +3712,13 @@ function createInterface() {
         createHiddenPostButton.disabled = true;
         try {
             let res = await createHiddenPost();
-            if (res)
+            if (res) {
                 alert('Спрятано ' + res.len + ' байт (занято ' + res.percent + '% изображения)');
+                if (storage.isFormClearEnabled) {
+                    document.getElementById('hiddenPostInput').value = '';
+                    document.getElementById('hiddenFilesInput').value = null;
+                }
+            }
         } catch (e) {
             Utils.trace('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
             alert('Ошибка при создании скрытопоста: ' + e);
@@ -4035,7 +4084,7 @@ async function packPost(message, files, privateKey) {
     return data;
 }
 
-async function createHiddenPostImpl(container, message, files, password, privateKey, otherPublicKey) {
+async function encryptPost(message, files, password, privateKey, otherPublicKey) {
     let oneTimePublicKey = null;
     if (otherPublicKey.length > 0) {
         // Создаем одноразовую пару ключей
@@ -4057,7 +4106,50 @@ async function createHiddenPostImpl(container, message, files, password, private
         keyAndData.set(encryptedData, oneTimePublicKey.length);
         encryptedData = keyAndData;
     }
+    return encryptedData;
+}
 
+async function getRandomContainer(dataLength) {
+    const MIN_WIDTH = Utils.getRandomInRange(800-50, 800+50);
+    const MAX_WIDTH = Utils.getRandomInRange(3000-200, 3000+200);
+    const RATIO = Utils.getRandomInRange(1.2, 2.0, true);
+    const MIN_FILL_RATIO = 0.2;
+    const MAX_FILL_RATIO = 0.6;
+
+    let pixelCount = dataLength / MIN_FILL_RATIO / 3;
+    let width = Math.floor(Math.sqrt(pixelCount * RATIO));
+    if (width < MIN_WIDTH) {
+        width = MIN_WIDTH;
+    }
+    if (width > MAX_WIDTH) {
+        width = MAX_WIDTH;
+        // проверяем, что данные поместятся в картинку с макс. разрешением
+        let rgbCount = width * (width/RATIO) * 3;
+        let newFillRatio = dataLength / rgbCount;
+        if (newFillRatio > MAX_FILL_RATIO)
+            throw new Error('Невозможно вместить данные в случайный контейнер. Выбери свою картинку с большим разрешением.');
+    }
+
+    let height = Math.floor(width / RATIO);
+
+    let image = new Image();
+    image.crossOrigin = "anonymous";
+    try {
+        // ?x=... нужно для отключения кэша
+        image.src = `https://picsum.photos/${width}/${height}?x=${Date.now()}`;
+        await image.decode();
+    } catch (e) {
+        Utils.trace(`HiddenThread: ошибка при загрузке случайного контейнера "${image.src}": ${e}`);
+        throw new Error('Не удалось загрузить случайный контейнер. Попробуйте ещё раз или выберите свою картинку.');
+    }
+    return image;
+}
+
+async function createHiddenPostImpl(container, message, files, password, privateKey, otherPublicKey) {
+    let encryptedData = await encryptPost(message, files, password, privateKey, otherPublicKey);
+    if (!container.image) {
+        container.image = await getRandomContainer(encryptedData.length);
+    }
     let imageResult = await hideDataToImage(container, encryptedData);
 
     return imageResult;
@@ -4713,6 +4805,13 @@ function getHumanReadableSize(bytes) {
     return bytes.toFixed(1)+' '+units[u];
 }
 
+function getRandomInRange(min, max, isFloat) {
+    if (isFloat)
+        return Math.random() * (max - min) + min;
+    else
+        return Math.floor(Math.random() * (max - min) + min);
+}
+
 function trace(s) {
     console.log(s);
 }
@@ -4725,6 +4824,7 @@ module.exports.arrayToBase64url = arrayToBase64url
 module.exports.base64urlToArray = base64urlToArray
 module.exports.shuffleArray = shuffleArray
 module.exports.getHumanReadableSize = getHumanReadableSize
+module.exports.getRandomInRange = getRandomInRange
 module.exports.trace = trace
 
 },{}]},{},[11]);
