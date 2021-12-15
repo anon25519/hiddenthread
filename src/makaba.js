@@ -43,11 +43,39 @@ function getContainerName() {
     return fileName.endsWith('.png') ? fileName : `${fileName}.png`
 }
 
+function getContainerLocalFile() {
+    let container = null;
+    let containers = document.getElementById('hiddenContainerInput').files;
+    if (containers.length == 0) {
+        alert("Выберите файл!");
+        return null;
+    }
+
+    let containersNum = new Array(containers.length);
+    for (let i = 0; i < containersNum.length; i++) containersNum[i] = i;
+    Utils.shuffleArray(containersNum, containersNum.length, Math);
+
+    for (let num of containersNum) {
+        if (containers[num].type == 'image/png' ||
+            containers[num].type == 'image/jpeg') {
+            container = containers[num];
+            break;
+        }
+    }
+
+    if (!container) {
+        alert(containers.length == 1 ?
+            "Выбранный файл должен быть JPG или PNG картинкой!" :
+            "Хотя бы один из выбранных файлов должен быть JPG или PNG картинкой!");
+        return null;
+    }
+
+    return container;
+}
+
 async function createHiddenPost() {
     let imageContainerDiv = document.getElementById('imageContainerDiv');
     imageContainerDiv.innerHTML = '';
-
-    let containers = document.getElementById('hiddenContainerInput').files;
 
     let maxDataRatio = 0;
     let isDownscaleAllowed = document.getElementById('isDownscaleAllowed').checked;
@@ -56,28 +84,13 @@ async function createHiddenPost() {
     }
 
     let container = null;
-    if (containers.length > 0) {
-        let containersNum = new Array(containers.length);
-        for (let i = 0; i < containersNum.length; i++) containersNum[i] = i;
-        Utils.shuffleArray(containersNum, containersNum.length, Math);
-
-        for (let num of containersNum) {
-            if (containers[num].type == 'image/png' ||
-                containers[num].type == 'image/jpeg') {
-                container = containers[num];
-                break;
-            }
-        }
-    
-        if (!container) {
-            alert(containers.length == 1 ?
-                "Выбранный файл должен быть JPG или PNG картинкой!" :
-                "Хотя бы один из выбранных файлов должен быть JPG или PNG картинкой!");
+    let containerType = document.getElementById('htContainerTypeSelect').selectedIndex;
+    if (containerType == 1) {
+        container = getContainerLocalFile();
+        if (!container)
             return;
-        }
-    }
-    else {
-        // Если не выбрана картинка, создаем пустую 1x1
+    } else if (containerType == 2) {
+        // Для генерации создаем пустую картинку 1x1
         container = new ImageData(new Uint8ClampedArray(4), 1, 1);
         // Если не выбран процент заполнения, заполняем всё
         if (maxDataRatio == 0) maxDataRatio = 1;
@@ -112,6 +125,12 @@ async function createHiddenPost() {
     imageContainerDiv.appendChild(createElementFromHTML('<span>Сохрани изображение ниже и вставь в форму отправки, если оно не вставилось автоматически:</span>'));
     imageContainerDiv.appendChild(document.createElement('br'));
     imageContainerDiv.appendChild(img);
+
+    imageContainerDiv.appendChild(document.createElement('br'));
+    imageContainerDiv.appendChild(document.createTextNode(
+        `${imageResult.canvas.width}x${imageResult.canvas.height}, ` +
+        `скрыто: ${Utils.getHumanReadableSize(imageResult.len)}, ` +
+        `заполнено пикселей: ${imageResult.percent}%`));
 
     let downloadLink  = document.createElement('a');
     downloadLink.innerText = 'Сохранить картинку'
@@ -577,18 +596,6 @@ function createInterface() {
                     <span>Выбери скрытые файлы: </span>
                     <input id="hiddenFilesInput" type="file" multiple="true" />
                     <br>
-                    <span>Выбери картинку-контейнер (из нескольких берется рандомная): </span>
-                    <input id="hiddenContainerInput" type="file" multiple="true" />
-                    <br>
-                    <span style="margin-right: 5px">Имя картинки:</span>
-                    <div class="selectbox">
-                    <select id="htContainerNameSelect" class="input select" style="max-width:15ch">
-                        <option>image.png</option>
-                        <option>unixtime</option>
-                    </select>
-                    </div>
-                    <input id="htContainerName">
-                    <br>
                     <input id="hiddenFilesClearButton" class="mt-1" type="button" value="Очистить список файлов" />
                     <input id="hiddenContainerClearButton" class="mt-1" type="button" value="Очистить список контейнеров" />
                 </div>
@@ -620,6 +627,31 @@ function createInterface() {
                 </div>
                 <div style="padding: 5px;">
                     <div style="font-size:large;text-align:center;">Настройки контейнера</div>
+                    <div>
+                        <span style="margin-right: 5px">Картинка:</span>
+                        <div class="selectbox">
+                        <select id="htContainerTypeSelect" class="input select" style="max-width:25ch">
+                            <option>загрузить случайную</option>
+                            <option>выбрать свою</option>
+                            <option>сгенерировать</option>
+                        </select>
+                        </div>
+                        <div id="htContainerInputDiv">
+                            <span>Выбери файл(ы) (из нескольких берется рандомный): </span>
+                            <input id="hiddenContainerInput" type="file" multiple="true" />
+                            <br><br>
+                        </div>
+                    </div>
+                    <div>
+                        <span style="margin-right: 5px">Имя картинки:</span>
+                        <div class="selectbox">
+                        <select id="htContainerNameSelect" class="input select" style="max-width:15ch">
+                            <option>image.png</option>
+                            <option>unixtime</option>
+                        </select>
+                        </div>
+                        <input id="htContainerName">
+                    </div>
                     <div>Подстраивать разрешение картинки под размер поста: <input id="isDataRatioLimited" type="checkbox"></div>
                     <div id="maxDataRatioDiv" style="display:none">
                     <div>Точное соответствие (картинка может быть уменьшена): <input id="isDownscaleAllowed" type="checkbox"></div>
@@ -748,19 +780,25 @@ function createInterface() {
     }
 
     document.getElementById('htContainerNameSelect').onclick = function () {
-        function getRandomInRange(min, max) {
-            return Math.floor(Math.random() * (max - min) + min);
-        }
         document.getElementById('htContainerName').value = '';
         if (this.selectedIndex == 0) {
             document.getElementById('htContainerName').placeholder = 'image.png';
         } else {
-            document.getElementById('htContainerName').placeholder = `${getRandomInRange(14000000000000, Date.now()*10)}.png`;
+            document.getElementById('htContainerName').placeholder =
+                `${Utils.getRandomInRange(14000000000000, Date.now()*10)}.png`;
         }
         setStorage({ containerName: this.selectedIndex });
     }
     document.getElementById('htContainerNameSelect').selectedIndex = storage.containerName ? storage.containerName : 0;
     document.getElementById('htContainerNameSelect').click();
+
+    document.getElementById('htContainerTypeSelect').onclick = function () {
+        document.getElementById('htContainerInputDiv').style.display = (this.selectedIndex == 1) ?
+            'block' : 'none';
+        setStorage({ containerType: this.selectedIndex });
+    }
+    document.getElementById('htContainerTypeSelect').selectedIndex = storage.containerType ? storage.containerType : 0;
+    document.getElementById('htContainerTypeSelect').click();
 
     document.getElementById('htClearFormButton').onclick = function () {
         document.getElementById('hiddenPostInput').value = '';

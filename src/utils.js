@@ -74,6 +74,13 @@ function getHumanReadableSize(bytes) {
     return bytes.toFixed(1)+' '+units[u];
 }
 
+function getRandomInRange(min, max, isFloat) {
+    if (isFloat)
+        return Math.random() * (max - min) + min;
+    else
+        return Math.floor(Math.random() * (max - min) + min);
+}
+
 function trace(s) {
     console.log(s);
 }
@@ -86,4 +93,5 @@ module.exports.arrayToBase64url = arrayToBase64url
 module.exports.base64urlToArray = base64urlToArray
 module.exports.shuffleArray = shuffleArray
 module.exports.getHumanReadableSize = getHumanReadableSize
+module.exports.getRandomInRange = getRandomInRange
 module.exports.trace = trace

@@ -121,7 +121,7 @@ async function packPost(message, files, privateKey) {
     return data;
 }
 
-async function createHiddenPostImpl(container, message, files, password, privateKey, otherPublicKey) {
+async function encryptPost(message, files, password, privateKey, otherPublicKey) {
     let oneTimePublicKey = null;
     if (otherPublicKey.length > 0) {
         // Создаем одноразовую пару ключей
@@ -143,7 +143,50 @@ async function createHiddenPostImpl(container, message, files, password, private
         keyAndData.set(encryptedData, oneTimePublicKey.length);
         encryptedData = keyAndData;
     }
+    return encryptedData;
+}
 
+async function getRandomContainer(dataLength) {
+    const MIN_WIDTH = Utils.getRandomInRange(800-50, 800+50);
+    const MAX_WIDTH = Utils.getRandomInRange(3000-200, 3000+200);
+    const RATIO = Utils.getRandomInRange(1.2, 2.0, true);
+    const MIN_FILL_RATIO = 0.2;
+    const MAX_FILL_RATIO = 0.6;
+
+    let pixelCount = dataLength / MIN_FILL_RATIO / 3;
+    let width = Math.floor(Math.sqrt(pixelCount * RATIO));
+    if (width < MIN_WIDTH) {
+        width = MIN_WIDTH;
+    }
+    if (width > MAX_WIDTH) {
+        width = MAX_WIDTH;
+        // проверяем, что данные поместятся в картинку с макс. разрешением
+        let rgbCount = width * (width/RATIO) * 3;
+        let newFillRatio = dataLength / rgbCount;
+        if (newFillRatio > MAX_FILL_RATIO)
+            throw new Error('Невозможно вместить данные в случайный контейнер. Выбери свою картинку с большим разрешением.');
+    }
+
+    let height = Math.floor(width / RATIO);
+
+    let image = new Image();
+    image.crossOrigin = "anonymous";
+    try {
+        // ?x=... нужно для отключения кэша
+        image.src = `https://picsum.photos/${width}/${height}?x=${Date.now()}`;
+        await image.decode();
+    } catch (e) {
+        Utils.trace(`HiddenThread: ошибка при загрузке случайного контейнера "${image.src}": ${e}`);
+        throw new Error('Не удалось загрузить случайный контейнер. Попробуйте ещё раз или выберите свою картинку.');
+    }
+    return image;
+}
+
+async function createHiddenPostImpl(container, message, files, password, privateKey, otherPublicKey) {
+    let encryptedData = await encryptPost(message, files, password, privateKey, otherPublicKey);
+    if (!container.image) {
+        container.image = await getRandomContainer(encryptedData.length);
+    }
     let imageResult = await hideDataToImage(container, encryptedData);
 
     return imageResult;
