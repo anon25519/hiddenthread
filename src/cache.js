@@ -2,6 +2,7 @@ let Utils = require('./utils.js')
 
 let db = null;
 let maxCacheSize = 0;
+let WRONG_PASSWORDS_LIMIT = 10;
 
 async function initCacheStorage(_maxCacheSize) {
     let openRequest = indexedDB.open("htdb", 1);
@@ -190,15 +191,15 @@ async function checkCacheOverflow(objectStore, sizeDelta)
     }
 }
 
-function updateArray(array, value) {
+function insertWithLimit(array, value) {
     array.push(value);
-    if (array.length > 10) {
+    if (array.length > WRONG_PASSWORDS_LIMIT) {
         array.shift();
     }
     return array;
 }
 
-async function updateCache(imgId, loadedPost, passwordHash, privateKeyHash) {
+async function updateCache(imgId, loadedPost, passwordHashes, privateKeyHashes) {
     if (maxCacheSize == 0)
         return;
 
@@ -224,25 +225,27 @@ async function updateCache(imgId, loadedPost, passwordHash, privateKeyHash) {
         }
     } else {
         if (cachedPost && !cachedPost.hiddenPost) {
-            let hasPasswordHash = cachedPost.wrongPasswordHashes.indexOf(passwordHash) != -1;
-            let hasPrivateKeyHash = cachedPost.wrongPrivateKeyHashes.indexOf(privateKeyHash) != -1;
-            let newWrongPasswordHashes = !hasPasswordHash ?
-                updateArray(cachedPost.wrongPasswordHashes, passwordHash) :
-                cachedPost.wrongPasswordHashes;
-            let newWrongPrivateKeyHashes = !hasPrivateKeyHash ?
-                updateArray(cachedPost.wrongPrivateKeyHashes, privateKeyHash) :
-                cachedPost.wrongPrivateKeyHashes;
+            function updateArray(oldArray, newArray) {
+                let newValues = newArray.filter(x => !oldArray.includes(x));
+                for (let value of newValues) {
+                    oldArray = insertWithLimit(oldArray, value);
+                }
+                return { updated: newValues.length > 0, updatedArray: oldArray };
+            }
+            let updatePasswordsResult = updateArray(cachedPost.wrongPasswordHashes, passwordHashes);
+            let updatePrivateKeysResult = updateArray(cachedPost.wrongPrivateKeyHashes, privateKeyHashes);
 
-            if (!hasPasswordHash || !hasPrivateKeyHash) {
-                // в кэше не скрытопост и в кэше нет текущего пароля или ключа
+            if (updatePasswordsResult.updated || updatePrivateKeysResult.updated) {
+                // в кэше не скрытопост и в кэше нет хотя бы одного текущего пароля или ключа
                 newCachedPostSize = await saveNormalPostCache(objectStore, imgId,
-                    newWrongPasswordHashes, newWrongPrivateKeyHashes, cachedPost.id);
+                    updatePasswordsResult.updatedArray, updatePrivateKeysResult.updatedArray, cachedPost.id);
             } else {
                 newCachedPostSize = oldCachedPostSize;
             }
         } else if(!cachedPost) {
             // кэш пуст
-            newCachedPostSize = await saveNormalPostCache(objectStore, imgId, [passwordHash,], [privateKeyHash,]);
+            newCachedPostSize = await saveNormalPostCache(objectStore, imgId,
+                passwordHashes.slice(0, WRONG_PASSWORDS_LIMIT), privateKeyHashes.slice(0, WRONG_PASSWORDS_LIMIT));
         } else {
             throw new Error('assert');
         }

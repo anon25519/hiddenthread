@@ -2326,6 +2326,7 @@ let Utils = require('./utils.js')
 
 let db = null;
 let maxCacheSize = 0;
+let WRONG_PASSWORDS_LIMIT = 10;
 
 async function initCacheStorage(_maxCacheSize) {
     let openRequest = indexedDB.open("htdb", 1);
@@ -2514,15 +2515,15 @@ async function checkCacheOverflow(objectStore, sizeDelta)
     }
 }
 
-function updateArray(array, value) {
+function insertWithLimit(array, value) {
     array.push(value);
-    if (array.length > 10) {
+    if (array.length > WRONG_PASSWORDS_LIMIT) {
         array.shift();
     }
     return array;
 }
 
-async function updateCache(imgId, loadedPost, passwordHash, privateKeyHash) {
+async function updateCache(imgId, loadedPost, passwordHashes, privateKeyHashes) {
     if (maxCacheSize == 0)
         return;
 
@@ -2548,25 +2549,27 @@ async function updateCache(imgId, loadedPost, passwordHash, privateKeyHash) {
         }
     } else {
         if (cachedPost && !cachedPost.hiddenPost) {
-            let hasPasswordHash = cachedPost.wrongPasswordHashes.indexOf(passwordHash) != -1;
-            let hasPrivateKeyHash = cachedPost.wrongPrivateKeyHashes.indexOf(privateKeyHash) != -1;
-            let newWrongPasswordHashes = !hasPasswordHash ?
-                updateArray(cachedPost.wrongPasswordHashes, passwordHash) :
-                cachedPost.wrongPasswordHashes;
-            let newWrongPrivateKeyHashes = !hasPrivateKeyHash ?
-                updateArray(cachedPost.wrongPrivateKeyHashes, privateKeyHash) :
-                cachedPost.wrongPrivateKeyHashes;
+            function updateArray(oldArray, newArray) {
+                let newValues = newArray.filter(x => !oldArray.includes(x));
+                for (let value of newValues) {
+                    oldArray = insertWithLimit(oldArray, value);
+                }
+                return { updated: newValues.length > 0, updatedArray: oldArray };
+            }
+            let updatePasswordsResult = updateArray(cachedPost.wrongPasswordHashes, passwordHashes);
+            let updatePrivateKeysResult = updateArray(cachedPost.wrongPrivateKeyHashes, privateKeyHashes);
 
-            if (!hasPasswordHash || !hasPrivateKeyHash) {
-                // в кэше не скрытопост и в кэше нет текущего пароля или ключа
+            if (updatePasswordsResult.updated || updatePrivateKeysResult.updated) {
+                // в кэше не скрытопост и в кэше нет хотя бы одного текущего пароля или ключа
                 newCachedPostSize = await saveNormalPostCache(objectStore, imgId,
-                    newWrongPasswordHashes, newWrongPrivateKeyHashes, cachedPost.id);
+                    updatePasswordsResult.updatedArray, updatePrivateKeysResult.updatedArray, cachedPost.id);
             } else {
                 newCachedPostSize = oldCachedPostSize;
             }
         } else if(!cachedPost) {
             // кэш пуст
-            newCachedPostSize = await saveNormalPostCache(objectStore, imgId, [passwordHash,], [privateKeyHash,]);
+            newCachedPostSize = await saveNormalPostCache(objectStore, imgId,
+                passwordHashes.slice(0, WRONG_PASSWORDS_LIMIT), privateKeyHashes.slice(0, WRONG_PASSWORDS_LIMIT));
         } else {
             throw new Error('assert');
         }
@@ -2855,12 +2858,17 @@ async function deriveSecretKey(privateKeyBase58, publicKeyBase58) {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-async function digestMessage(message) {
+async function digestMessageHex(message) {
     const msgUint8 = new TextEncoder().encode(message);                           // encode as (utf-8) Uint8Array
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);           // hash the message
     const hashArray = Array.from(new Uint8Array(hashBuffer));                     // convert buffer to byte array
     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join(''); // convert bytes to hex string
     return hashHex;
+}
+async function digestMessageBase58(message) {
+    const msgUint8 = new TextEncoder().encode(message);                           // encode as (utf-8) Uint8Array
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);           // hash the message
+    return Utils.arrayToBase58(new Uint8Array(hashBuffer));
 }
 
 module.exports.encrypt = encrypt
@@ -2870,7 +2878,8 @@ module.exports.generateKeyPair = generateKeyPair
 module.exports.sign = sign
 module.exports.verify = verify
 module.exports.deriveSecretKey = deriveSecretKey
-module.exports.digestMessage = digestMessage
+module.exports.digestMessageHex = digestMessageHex
+module.exports.digestMessageBase58 = digestMessageBase58
 
 module.exports.BLOCK_SIZE = BLOCK_SIZE
 module.exports.IV_SIZE = IV_SIZE
@@ -2903,6 +2912,15 @@ let setStorage = (value) => {
     storage = newStorage;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newStorage));
 }
+
+let passwordAliases = {};
+let privateKeyAliases = {};
+let otherPublicKeyAliases = {};
+
+// [{alias:'...', value:'...'}, ...]
+let passwords = [];
+let privateKeys = [];
+let otherPublicKeys = [];
 
 function createElementFromHTML(htmlString) {
     let div = document.createElement('div');
@@ -2983,9 +3001,9 @@ async function createHiddenPost() {
         },
         document.getElementById('hiddenPostInput').value,
         document.getElementById('hiddenFilesInput').files,
-        document.getElementById('hiddenThreadPassword').value,
-        document.getElementById('privateKey').value,
-        document.getElementById('otherPublicKey').value);
+        document.getElementById('htPassword').value,
+        document.getElementById('htPrivateKey').value,
+        document.getElementById('htOtherPublicKey').value);
 
     let toBlobPromise = new Promise(function(resolve, reject) {
         imageResult.canvas.toBlob(function(blob) {
@@ -3178,9 +3196,6 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     let postArticleMessage = document.createElement('div');
     postArticleMessage.innerHTML = convertToHtml(unpackedData.message);
 
-    if (loadedPost.isPrivate) {
-        postMetadata.appendChild(createElementFromHTML('<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом</i></div>'));
-    }
     let tzOffset = (new Date()).getTimezoneOffset() * 60;
     let timeString = (new Date((loadedPost.timestamp - tzOffset) * 1000))
         .toISOString().replace('T', ' ').replace(/\.\d+Z/g, '');
@@ -3191,19 +3206,32 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     }
     let tzName = (new Date()).toLocaleDateString(undefined, { timeZoneName: 'short' }).split(',')[1].trim();
     postMetadata.appendChild(createElementFromHTML(`<div>Дата создания скрытопоста (${tzName}): ${timeString}</div>`));
-    postMetadata.appendChild(Post.createFileLinksDiv(unpackedData.files,
-        unpackedData.hasSkippedFiles, postId, !storage.isPreviewDisabled));
+    if (loadedPost.password)
+        postMetadata.appendChild(createElementFromHTML(`<div>Пароль: ${passwordAliases[loadedPost.password]} (`+
+            `<input id="test" readonly="" `+
+            `style="color:var(--theme_default_text);background-color:rgba(0, 0, 0, 0);border:0px;width:9ch;" value="раскрыть" `+
+            `onclick="this.value='${loadedPost.password}';this.style.width='${loadedPost.password.length+1}ch'">)</div>`));
+    if (loadedPost.isPrivate) {
+        postMetadata.appendChild(createElementFromHTML(
+            `<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом `+
+            `(${privateKeyAliases[loadedPost.privateKey]})</i></div>`));
+    }
 
     if (loadedPost.publicKey) {
         let postArticleSign = document.createElement('div');
+        let publicKeyAlias = otherPublicKeyAliases[loadedPost.publicKey];
         postArticleSign.innerHTML =
-            'Публичный ключ: <span style="word-wrap:normal;word-break:normal;color:' +
-            (loadedPost.isVerified ? 'green' : 'red') + ';">' +
-            loadedPost.publicKey + '</span>' +
-            (loadedPost.isVerified ? '' : ' (неверная подпись!)');
+            `${publicKeyAlias ? 'Отправитель' : 'Публичный ключ'}: <span style="word-wrap:normal;word-break:normal;color:` +
+            `${loadedPost.isVerified ? 'green' : 'red'};">` +
+            `${publicKeyAlias ? publicKeyAlias : loadedPost.publicKey}</span>` +
+            `${loadedPost.isVerified ? '' : ' (неверная подпись!)'}`;
         postMetadata.appendChild(postArticleSign);
     }
+
+    postMetadata.appendChild(Post.createFileLinksDiv(unpackedData.files,
+        unpackedData.hasSkippedFiles, postId, !storage.isPreviewDisabled));
     postArticle.appendChild(postMetadata);
+
     if (unpackedData.unpackResult) {
         postArticle.appendChild(createElementFromHTML(
             `<div style="font-family:courier new;color:red;">${unpackedData.unpackResult}</div>`));
@@ -3328,17 +3356,8 @@ function renderHiddenPost(postId, loadedPost, unpackedData) {
     addHiddenPostToObj(postId); // Текст скрытопоста берется из HTML
 }
 
-/* Перепроверить все посты */
-function reloadHiddenPosts() {
-    // очистить список скаченных и просмотренных изображений
-    // чтобы они снова скачались и просканировались
-    document.getElementById("imagesLoadedCount").textContent = loadedPosts.size;
-    watchedImages = new Set();
-    loadHiddenThread();
-}
 
-
-async function loadAndRenderPost(postId, url, password, privateKey) {
+async function loadAndRenderPost(postId, url, passwords, privateKeys) {
     let response = await fetch(url);
     if (!response.ok) throw new Error(`fetch not ok, url: ${url}`);
     let imgArrayBuffer = await response.arrayBuffer();
@@ -3347,7 +3366,7 @@ async function loadAndRenderPost(postId, url, password, privateKey) {
     document.getElementById("imagesLoadedCount").textContent =
         parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
 
-    let loadedPost = await Post.loadPostFromImage(imgArrayBuffer, password, privateKey);
+    let loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys);
 
     if (!loadedPost)
         return loadedPost;
@@ -3365,7 +3384,7 @@ async function loadAndRenderPost(postId, url, password, privateKey) {
 Проверяет есть ли в этом посте скрытый пост, расшифровывает
 и выводит результат
 */
-async function loadPost(postId, url, password, privateKey, passwordHash, privateKeyHash) {
+async function loadPost(postId, url, passwords, privateKeys, passwordHashes, privateKeyHashes) {
     Utils.trace('HiddenThread: loading post ' + postId + ' ' + url);
 
     let imgId = getImgName(url);
@@ -3375,14 +3394,16 @@ async function loadPost(postId, url, password, privateKey, passwordHash, private
     } catch (e) {}
 
     if (cachedPost) {
-        // Если в кэше не скрытопост и в кэше нет текущего пароля или ключа,
+        // Если в кэше не скрытопост и в кэше нет хотя бы одного текущего пароля или ключа,
         // то загружаем пост, выводим его (если удалось декодировать), обновляем кэш
-        if (!cachedPost.hiddenPost && (cachedPost.wrongPasswordHashes.indexOf(passwordHash) == -1 ||
-            cachedPost.wrongPrivateKeyHashes.indexOf(privateKeyHash) == -1)) {
-            let loadedPost = await loadAndRenderPost(postId, url, password, privateKey);
+        if (!cachedPost.hiddenPost && (
+            passwordHashes.filter(x => !cachedPost.wrongPasswordHashes.includes(x)).length > 0 ||
+            privateKeyHashes.filter(x => !cachedPost.wrongPrivateKeyHashes.includes(x)).length > 0 ))
+        {
+            let loadedPost = await loadAndRenderPost(postId, url, passwords, privateKeys);
             try {
                 if (!storage.maxCachedPostSize || (loadedPost.zipData.size < storage.maxCachedPostSize * 1024))
-                    await HtCache.updateCache(imgId, loadedPost, passwordHash, privateKeyHash);
+                    await HtCache.updateCache(imgId, loadedPost, passwordHashes, privateKeyHashes);
             } catch (e) {}
         }
         // Если в кэше скрытопост, выводим его
@@ -3405,10 +3426,10 @@ async function loadPost(postId, url, password, privateKey, passwordHash, private
     } else {
         // Если в кэше ничего нет, то загружаем пост,
         // выводим его (если удалось декодировать), обновляем кэш
-        let loadedPost = await loadAndRenderPost(postId, url, password, privateKey);
+        let loadedPost = await loadAndRenderPost(postId, url, passwords, privateKeys);
         try {
             if (!storage.maxCachedPostSize || (loadedPost.zipData.size < storage.maxCachedPostSize * 1024))
-                await HtCache.updateCache(imgId, loadedPost, passwordHash, privateKeyHash);
+                await HtCache.updateCache(imgId, loadedPost, passwordHashes, privateKeyHashes);
         } catch (e) {}
     }
 }
@@ -3436,6 +3457,169 @@ function CheckVersion() {
     request.send(null); // Send the request now
 }
 
+function addItemsToSelect(items, selectId) {
+    for (let item of items) {
+        let option = document.createElement('option');
+        let str = `${item.alias} (${item.value})`;
+        let shortStr = str.substring(0, 20);
+        option.textContent = shortStr + ((str.length != shortStr.length) ? '...' : '');
+        document.getElementById(selectId).add(option);
+    }
+}
+
+function createManager(managerType) {
+    let header1 = null;
+    let items = null;
+
+    // Обновляем пароли/ключи из хранилища
+    if (managerType == 'Password') {
+        passwords = storage.passwords ? storage.passwords : [];
+        items = passwords;
+        header1 = '<th style="width:250px">Пароль</th>';
+    } else if (managerType == 'PrivateKey') {
+        privateKeys = storage.privateKeys ? storage.privateKeys : [];
+        items = privateKeys;
+        header1 = '<th style="width:250px">Приватный ключ</th>';
+    } else {
+        otherPublicKeys = storage.otherPublicKeys ? storage.otherPublicKeys : [];
+        items = otherPublicKeys;
+        header1 = '<th style="width:250px">Публичный ключ</th>';
+    }
+
+    function createRow(index, item) {
+        let tr = document.createElement('tr');
+        tr.id = `ht${managerType}ManagerRow_${index}`;
+        let tdAlias = document.createElement('td');
+        let inputAlias = document.createElement('input');
+        inputAlias.style.width = '100%';
+        inputAlias.value = item.alias;
+        inputAlias.placeholder = 'Введите имя';
+        tdAlias.appendChild(inputAlias);
+        tr.appendChild(tdAlias);
+
+        let tdValue = document.createElement('td');
+        let inputValue = document.createElement('input');
+        inputValue.style.width = '100%';
+        inputValue.value = item.value;
+        inputValue.placeholder = `Вставьте ${managerType == 'Password' ? 'пароль' :
+            (managerType == 'PrivateKey' ? 'приватный ключ' : 'публичный ключ')}`;
+        tdValue.appendChild(inputValue);
+        tr.appendChild(tdValue);
+
+        let tdDelete = document.createElement('td');
+        let inputDelete = document.createElement('input');
+        inputDelete.type = 'button';
+        inputDelete.value = "Удалить";
+        inputDelete.onclick = function () {
+            document.getElementById(`ht${managerType}ManagerRow_${index}`).remove();
+        }
+        tdDelete.appendChild(inputDelete);
+        tr.appendChild(tdDelete);
+        return tr;
+    }
+
+    let tableHtml = `
+        <table border="1"><tbody id="ht${managerType}ManagerBody">
+        <tr><th style="width:100px">Имя</th>${header1}<th></th></tr></tbody></table>`;
+    document.getElementById(`ht${managerType}ManagerDiv`).insertAdjacentHTML('afterbegin', tableHtml);
+
+    let i = 0;
+    for (let item of items) {
+        document.getElementById(`ht${managerType}ManagerBody`).appendChild(createRow(i, item));
+        i++;
+    }
+
+    let buttonsDiv = document.createElement('div');
+    buttonsDiv.align = 'center';
+
+    let addButton = document.createElement('input');
+    addButton.type = 'button';
+    addButton.value = 'Добавить';
+    addButton.style = 'padding:5px;margin:auto';
+    addButton.onclick = function() {
+        let rows = document.getElementById(`ht${managerType}ManagerBody`).getElementsByTagName('tr');
+        let lastIndex = 0;
+        if (rows.length > 1) {
+            lastIndex = parseInt(rows[rows.length - 1].id.split('_')[1]) + 1;
+        }
+        document.getElementById(`ht${managerType}ManagerBody`).appendChild(createRow(lastIndex, {alias:'', value:''}));
+    }
+
+    let saveButton = document.createElement('input');
+    saveButton.type = 'button';
+    saveButton.value = 'Сохранить';
+    saveButton.style = 'padding:5px;margin:auto';
+    saveButton.onclick = function() {
+        let newItems = [];
+        let rows = document.getElementById(`ht${managerType}ManagerBody`).getElementsByTagName('tr');
+        for (let row of rows) {
+            let inputs = row.getElementsByTagName('input');
+            if (inputs.length < 2) continue;
+            newItems.push({alias: inputs[0].value, value: inputs[1].value});
+        }
+
+        // Обновляем хранилище и переменные
+        if (managerType == 'Password') {
+            setStorage({ passwords: newItems });
+            passwords = newItems;
+            passwordAliases = {};
+            for (let password of passwords) {
+                passwordAliases[password.value] = password.alias;
+            }
+        } else if (managerType == 'PrivateKey') {
+            setStorage({ privateKeys: newItems });
+            privateKeys = newItems;
+            privateKeyAliases = {};
+            for (let privateKey of privateKeys) {
+                privateKeyAliases[privateKey.value] = privateKey.alias;
+            }
+        } else {
+            setStorage({ otherPublicKeys: newItems });
+            otherPublicKeys = newItems;
+            otherPublicKeyAliases = {};
+            for (let otherPublicKey of otherPublicKeys) {
+                otherPublicKeyAliases[otherPublicKey.value] = otherPublicKey.alias;
+            }
+        }
+        items = newItems;
+
+        // Обновляем элементы в выпадающем списке и в форме ввода
+        if (document.getElementById(`ht${managerType}Select`).selectedIndex > 1) {
+            document.getElementById(`ht${managerType}Select`).prevIndex = 0;
+            document.getElementById(`ht${managerType}Select`).selectedIndex = 0;
+            document.getElementById(`ht${managerType}InputDiv`).style.display = 'none';
+            document.getElementById(`ht${managerType}`).value = '';
+            if (managerType == 'PrivateKey') {
+                document.getElementById(`htPublicKey`).value = '';
+                document.getElementById(`htPrivatePhrase`).value = '';
+            }
+        }
+        let selectOptions = document.getElementById(`ht${managerType}Select`).getElementsByTagName('option');
+        for (let i = selectOptions.length - 1; i > 1; i--) {
+            selectOptions[i].remove();
+        }
+        addItemsToSelect(items, `ht${managerType}Select`);
+
+        document.getElementById(`ht${managerType}ManagerDiv`).innerHTML = '';
+    }
+
+    buttonsDiv.appendChild(addButton);
+    buttonsDiv.appendChild(saveButton);
+    document.getElementById(`ht${managerType}ManagerDiv`).appendChild(buttonsDiv);
+}
+
+function privateToPublicKey(privateKey) {
+    let publicKeyArray = null;
+    try {
+        publicKeyArray = Crypto.importPublicKeyArrayFromPrivateKey(privateKey);
+    }
+    catch (e) { }
+    if (publicKeyArray && publicKeyArray.length > 0) {
+        return Utils.arrayToBase58(publicKeyArray);
+    }
+    return '';
+}
+
 function createInterface() {
     let toggleText = () => {
         return storage.hidePostForm
@@ -3447,18 +3631,14 @@ function createInterface() {
         <div id="hiddenPostDiv" style="display: inline-block; text-align: left; ${isDollchan()?'min-width: 600px;':'width: 100%;'}">
             <hr>
             <div style="position: relative; display: flex; justify-content: center; align-items: center">
-                <p style="font-size:x-large;">Скрытотред ${CURRENT_VERSION}</p>
+                <p style="font-size:x-large;">Скрытотред ${CURRENT_VERSION}
+                    <a target="_blank" style="font-size: small; margin-left: 5px" href="https://github.com/anon25519/hiddenthread">?</a>
+                </p>
                 <span id="hiddenThreadToggle" style="position: absolute; right: 0; cursor: pointer">${toggleText()}</span>
             </div>
             <div id="hiddenThreadForm" style="display: ${storage.hidePostForm ? 'none' : ''}">
                 <div style="padding:5px;">
                     <input id="htClearFormButton" type="button" style="padding:5px;margin:auto;display:block;color:red" value="Очистить форму" />
-                </div>
-                <div style="padding:5px;">
-                    <span style="padding-right: 5px;">Пароль:</span>
-                    <input placeholder="Без пароля" id="hiddenThreadPassword" />
-                    <input id="reloadHiddenPostsButton" type="button" style="padding: 5px;" value="Загрузить скрытопосты" />
-                    <a target="_blank" style="font-size: small; margin-left: 5px" href="https://github.com/anon25519/hiddenthread">?</a>
                 </div>
                 <div style="padding:5px;text-align:center;">
                     <!--<span id="loadingStatus" style="display: none">Загрузка...</span>-->
@@ -3479,32 +3659,58 @@ function createInterface() {
                     <br>
                     <input id="hiddenFilesClearButton" class="mt-1" type="button" value="Очистить список файлов" />
                 </div>
+
                 <div style="padding: 5px;">
-                    <div style="font-size:large;text-align:center;">Подписать пост</div>
-                    Приватный ключ (ECDSA p256, base58): <br>
-                    <input
-                        id="privateKey"
-                        placeholder="Без ключа"
-                        style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
-                    />
-                    <br>
-                    Публичный ключ:
-                    <br>
-                    <input
-                        id="publicKey"
-                        readonly
-                        style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px; color: grey;"
-                    />
-                    <br>
-                    <div align="center" class="mt-1">
-                        <input id="generateKeyPairButton" type="button" style="padding: 5px;" value="Сгенерировать ключи" />
+                    <div style="font-size:large;text-align:center;">Настройки шифрования</div>
+                    <div style="padding: 5px;">
+                        <span style="padding-right: 5px;">Пароль:</span>
+                        <div class="selectbox"><select id="htPasswordSelect" class="input select" style="max-width:25ch">
+                            <option>Без пароля</option>
+                            <option>Ввести вручную</option>
+                        </select></div>
+                        <input id="htPasswordManagerButton" type="button" value="Менеджер паролей" />
+                        <div id="htPasswordManagerDiv" align="center" style="padding-top:5px;"></div>
+                        <div id="htPasswordInputDiv" style="display:none;padding-top:5px;">
+                            <input id="htPassword" placeholder="Без пароля" autocomplete="off" style="max-width:64ch;width:100%" />
+                        </div>
+                    </div>
+                    <div style="padding: 5px;">
+                        <span style="padding-right: 5px;">Подпись:</span>
+                        <div class="selectbox"><select id="htPrivateKeySelect" class="input select" style="max-width:25ch">
+                            <option>Без ключа</option>
+                            <option>Ввести вручную</option>
+                        </select></div>
+                        <input id="htPrivateKeyManagerButton" type="button" value="Менеджер ключей" />
+                        <div id="htPrivateKeyManagerDiv" align="center" style="padding-top:5px;"></div>
+                        <div id="htPrivateKeyInputDiv" style="display:none;padding-top:5px;">
+                            <div id="htPrivatePhraseInputDiv">
+                                Секретная фраза для генерации ключа: <br>
+                                <input id="htPrivatePhrase" placeholder="Без секретной фразы" autocomplete="off" style="max-width:50ch;width:100%;padding-top:5px;" /><br>
+                            </div>
+                            Приватный ключ (ECDSA p256, base58): <br>
+                            <input id="htPrivateKey" placeholder="Без ключа" autocomplete="off" style="max-width:50ch;width:100%;padding-top:5px;" /><br>
+                            Публичный ключ: <br>
+                            <input id="htPublicKey" autocomplete="off" readonly style="max-width:90ch;width:100%;color:grey;padding-top:5px;" />
+                            <div align="center" class="mt-1">
+                                <input id="generateKeyPairButton" type="button" value="Сгенерировать ключи" />
+                            </div>
+                        </div>
+                    </div>
+                    <div style="padding: 5px;">
+                        <span style="padding-right: 5px;">Получатель:</span>
+                        <div class="selectbox"><select id="htOtherPublicKeySelect" class="input select" style="max-width:25ch">
+                            <option>Все</option>
+                            <option>Ввести вручную</option>
+                        </select></div>
+                        <input id="htOtherPublicKeyManagerButton" type="button" value="Адресная книга" />
+                        <div id="htOtherPublicKeyManagerDiv" align="center" style="padding-top:5px;"></div>
+                        <div id="htOtherPublicKeyInputDiv" style="display:none;padding-top:5px;">
+                            Публичный ключ получателя: <br>
+                            <input id="htOtherPublicKey" placeholder="Без получателя" autocomplete="off" style="max-width:90ch;width:100%" />
+                        </div>
                     </div>
                 </div>
-                <div style="padding: 5px;">
-                    <div style="font-size:large;text-align:center;">Приватный пост</div>
-                    Публичный ключ получателя: <br>
-                    <input placeholder="Без получателя" id="otherPublicKey" style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;">
-                </div>
+
                 <div style="padding: 5px;">
                     <div style="font-size:large;text-align:center;">Настройки контейнера</div>
                     <div>
@@ -3530,7 +3736,7 @@ function createInterface() {
                             <option>unixtime</option>
                         </select>
                         </div>
-                        <input id="htContainerName">
+                        <input id="htContainerName" autocomplete="off">
                     </div>
                     <div>Подстраивать разрешение картинки под размер поста: <input id="isDataRatioLimited" type="checkbox"></div>
                     <div id="maxDataRatioDiv" style="display:none">
@@ -3585,8 +3791,8 @@ function createInterface() {
                 <div><input id="htIsPreviewDisabled" type="checkbox"> <span>Отключить превью картинок в скрытопостах</span></div>
                 <div><input id="htIsFormClearEnabled" type="checkbox"> <span>Включить очистку полей при создании картинки</span></div>
                 <div><input id="htPostsColor" maxlength="6" size="6"> <span>Цвет выделения скрытопостов (в hex)</span></div>
-                <div><input id="htMaxCachedPostSize" type="number" min="0" step="1" size="12"> <span>Макс. размер поста в кэше, Кб</span></div>
-                <div><input id="htMaxCacheSize" type="number" min="0" step="1" size="12"> <span>Макс. размер кэша, Мб</span></div>
+                <div><input id="htMaxCachedPostSize" type="number" min="0" step="1" size="12"> <span>Макс. размер поста в кэше, Кб (0 - без лимита)</span></div>
+                <div><input id="htMaxCacheSize" type="number" min="0" step="1" size="12"> <span>Макс. размер кэша, Мб (0 - кэш выключен)</span></div>
                 <div>Текущий размер кэша: <span id="htCacheSize">???</span></div>
                 <div><button id="htClearCache">Очистить кэш</button></div>
             </div>
@@ -3699,8 +3905,6 @@ function createInterface() {
         }
     }
 
-    document.getElementById('reloadHiddenPostsButton').onclick = reloadHiddenPosts;
-
     document.getElementById('hiddenFilesClearButton').onclick = function () {
         document.getElementById('hiddenFilesInput').value = null;
     }
@@ -3726,30 +3930,144 @@ function createInterface() {
         createHiddenPostButton.value = oldText;
         createHiddenPostButton.disabled = false;
     }
-    document.getElementById('generateKeyPairButton').onclick = function () {
-        if (!document.getElementById('privateKey').value ||
+
+
+    // Обработчики элементов в настройках шифрования
+    document.getElementById('htPasswordSelect').prevIndex = -1;
+    document.getElementById('htPasswordSelect').onclick = function (e) {
+        if (this.selectedIndex == this.prevIndex) return;
+        if (this.selectedIndex == 0) {
+            document.getElementById('htPasswordInputDiv').style.display = 'none';
+            document.getElementById('htPassword').value = '';
+        } else if (this.selectedIndex == 1) {
+            document.getElementById('htPasswordInputDiv').style.display = 'block';
+            document.getElementById('htPassword').style.color = '';
+            document.getElementById('htPassword').readOnly = false;
+            document.getElementById('htPassword').value = '';
+        } else {
+            document.getElementById('htPasswordInputDiv').style.display = 'block';
+            document.getElementById('htPassword').style.color = 'grey';
+            document.getElementById('htPassword').readOnly = true;
+            document.getElementById('htPassword').value = passwords[this.selectedIndex - 2].value;
+        }
+        this.prevIndex = this.selectedIndex;
+    }
+    document.getElementById('htPrivateKeySelect').prevIndex = -1;
+    document.getElementById('htPrivateKeySelect').onclick = function (e) {
+        if (this.selectedIndex == this.prevIndex) return;
+        if (this.selectedIndex == 0) {
+            document.getElementById('htPrivateKeyInputDiv').style.display = 'none';
+            document.getElementById('htPrivateKey').value = '';
+            document.getElementById('htPublicKey').value = '';
+            document.getElementById('htPrivatePhrase').value = '';
+        } else if (this.selectedIndex == 1) {
+            document.getElementById('htPrivateKeyInputDiv').style.display = 'block';
+            document.getElementById('htPrivatePhraseInputDiv').style.display = 'block';
+            document.getElementById('htPrivateKey').style.color = '';
+            document.getElementById('htPrivateKey').readOnly = false;
+            document.getElementById('htPrivateKey').value = '';
+            document.getElementById('htPublicKey').value = '';
+            document.getElementById('htPrivatePhrase').value = '';
+            document.getElementById('generateKeyPairButton').style.display = '';
+        } else {
+            document.getElementById('htPrivateKeyInputDiv').style.display = 'block';
+            document.getElementById('htPrivatePhraseInputDiv').style.display = 'none';
+            document.getElementById('htPrivateKey').style.color = 'grey';
+            document.getElementById('htPrivateKey').readOnly = true;
+            document.getElementById('htPrivateKey').value = privateKeys[this.selectedIndex - 2].value;
+            document.getElementById('htPublicKey').value = privateToPublicKey(privateKeys[this.selectedIndex - 2].value);
+            document.getElementById('htPrivatePhrase').value = '';
+            document.getElementById('generateKeyPairButton').style.display = 'none';
+        }
+        this.prevIndex = this.selectedIndex;
+    }
+    document.getElementById('htOtherPublicKeySelect').onclick = function (e) {
+        if (this.selectedIndex == this.prevIndex) return;
+        if (this.selectedIndex == 0) {
+            document.getElementById('htOtherPublicKeyInputDiv').style.display = 'none';
+            document.getElementById('htOtherPublicKey').value = '';
+        } else if (this.selectedIndex == 1) {
+            document.getElementById('htOtherPublicKeyInputDiv').style.display = 'block';
+            document.getElementById('htOtherPublicKey').style.color = '';
+            document.getElementById('htOtherPublicKey').readOnly = false;
+            document.getElementById('htOtherPublicKey').value = '';
+        } else {
+            document.getElementById('htOtherPublicKeyInputDiv').style.display = 'block';
+            document.getElementById('htOtherPublicKey').style.color = 'grey';
+            document.getElementById('htOtherPublicKey').readOnly = true;
+            document.getElementById('htOtherPublicKey').value = otherPublicKeys[this.selectedIndex - 2].value;
+        }
+        this.prevIndex = this.selectedIndex;
+    }
+
+    // Добавляем пароли и ключи в выпадающие списки
+    addItemsToSelect(passwords, 'htPasswordSelect');
+    addItemsToSelect(privateKeys, 'htPrivateKeySelect');
+    addItemsToSelect(otherPublicKeys, 'htOtherPublicKeySelect');
+
+    let generateKeyPairButton = document.getElementById('generateKeyPairButton');
+    generateKeyPairButton.onclick = async function () {
+        if (!document.getElementById('htPrivateKey').value ||
             confirm('Сгенерировать новую пару ключей? Предыдущая пара будет стерта!'))
         {
-            Crypto.generateKeyPair()
-                .then(function(pair) {
-                    document.getElementById('privateKey').value = pair[0];
-                    document.getElementById('publicKey').value = pair[1];
-                });
+            let oldText = generateKeyPairButton.value;
+            generateKeyPairButton.value = 'Генерируем ключи...';
+            generateKeyPairButton.disabled = true;
+
+            try {
+                let pair = await Crypto.generateKeyPair();
+                document.getElementById('htPrivatePhrase').value = '';
+                document.getElementById('htPrivateKey').value = pair[0];
+                document.getElementById('htPublicKey').value = pair[1];
+            } catch (e) {
+                Utils.trace('HiddenThread: Ошибка при создании ключей: ' + e + ' stack:\n' + e.stack);
+                alert('Ошибка при создании ключей: ' + e);
+            }
+
+            generateKeyPairButton.value = oldText;
+            generateKeyPairButton.disabled = false;
         }
     }
-    document.getElementById('privateKey').oninput = function () {
-        let privateKey = document.getElementById('privateKey').value;
-        let publicKeyArray = null;
-        try {
-            publicKeyArray = Crypto.importPublicKeyArrayFromPrivateKey(privateKey);
-        }
-        catch (e) { }
 
-        if (publicKeyArray && publicKeyArray.length > 0) {
-            document.getElementById('publicKey').value = Utils.arrayToBase58(publicKeyArray);
+    document.getElementById('htPrivateKey').oninput = function () {
+        document.getElementById(`htPrivatePhrase`).value = '';
+        document.getElementById('htPublicKey').value =
+            privateToPublicKey(document.getElementById('htPrivateKey').value);
+    }
+    document.getElementById('htPrivatePhrase').oninput = async function () {
+        if (document.getElementById('htPrivatePhrase').value) {
+            document.getElementById('htPrivateKey').value =
+                await Crypto.digestMessageBase58(document.getElementById('htPrivatePhrase').value);
+            document.getElementById('htPublicKey').value =
+                privateToPublicKey(document.getElementById('htPrivateKey').value);
+        } else {
+            document.getElementById('htPrivateKey').value = '';
+            document.getElementById('htPublicKey').value = '';
         }
-        else {
-            document.getElementById('publicKey').value = '';
+    }
+
+    document.getElementById('htPasswordManagerButton').onclick = function() {
+        let manager = document.getElementById('htPasswordManagerDiv');
+        if (!manager.innerHTML) {
+            createManager('Password');
+        } else {
+            manager.innerHTML = '';
+        }
+    }
+    document.getElementById('htPrivateKeyManagerButton').onclick = function() {
+        let manager = document.getElementById('htPrivateKeyManagerDiv');
+        if (!manager.innerHTML) {
+            createManager('PrivateKey');
+        } else {
+            manager.innerHTML = '';
+        }
+    }
+    document.getElementById('htOtherPublicKeyManagerButton').onclick = function() {
+        let manager = document.getElementById('htOtherPublicKeyManagerDiv');
+        if (!manager.innerHTML) {
+            createManager('OtherPublicKey');
+        } else {
+            manager.innerHTML = '';
         }
     }
 }
@@ -3883,10 +4201,17 @@ async function loadHiddenThread() {
     document.getElementById("imagesCount").textContent = getImagesCount(postsToScan).toString();
     document.getElementById('htCacheSize').textContent = `???+ ${await getCacheSizeReadable()} (IDB usage: ${await getIdbUsageReadable()})`;
 
-    let password = document.getElementById('hiddenThreadPassword').value;
-    let privateKey = document.getElementById('privateKey').value;
-    let passwordHash = await Crypto.digestMessage(password);
-    let privateKeyHash = await Crypto.digestMessage(privateKey);
+    // Добавляем пустой пароль
+    let actualPasswords = passwords.concat([{alias:'', value:''}]);
+
+    let passwordHashes = [];
+    for (let password of actualPasswords) {
+        passwordHashes.push(await Crypto.digestMessageHex(password.value));
+    }
+    let privateKeyHashes = [];
+    for (let privateKey of privateKeys) {
+        privateKeyHashes.push(await Crypto.digestMessageHex(privateKey.value));
+    }
 
     let loadPostPromises = [];
     for (let post of postsToScan) {
@@ -3900,7 +4225,7 @@ async function loadHiddenThread() {
             function promiseGenerator() {
                 return new Promise(async function(resolve, reject) {
                     try {
-                        await loadPost(post.postId, url, password, privateKey, passwordHash, privateKeyHash);
+                        await loadPost(post.postId, url, actualPasswords, privateKeys, passwordHashes, privateKeyHashes);
                     }
                     catch(e) {
                         Utils.trace('HiddenThread: Ошибка при загрузке поста: ' + e + ' stack:\n' + e.stack);
@@ -3931,6 +4256,26 @@ async function loadHiddenThread() {
     scanning = false;
 }
 
+function loadPasswordsAndKeys() {
+    passwords = storage.passwords ? storage.passwords : [];
+    passwordAliases = {};
+    for (let password of passwords) {
+        passwordAliases[password.value] = password.alias;
+    }
+
+    privateKeys = storage.privateKeys ? storage.privateKeys : [];
+    privateKeyAliases = {};
+    for (let privateKey of privateKeys) {
+        privateKeyAliases[privateKey.value] = privateKey.alias;
+    }
+
+    otherPublicKeys = storage.otherPublicKeys ? storage.otherPublicKeys : [];
+    otherPublicKeyAliases = {};
+    for (let otherPublicKey of otherPublicKeys) {
+        otherPublicKeyAliases[otherPublicKey.value] = otherPublicKey.alias;
+    }
+}
+
 function getImagesCount(postsToScan) {
     let r = 0;
     for (let i = 0; i < postsToScan.length; i++) {
@@ -3954,6 +4299,7 @@ if (!storage.isDebugLogEnabled)
     Utils.trace = function() {}
 
 HtCache.initCacheStorage(storage.maxCacheSize ? storage.maxCacheSize : 0);
+loadPasswordsAndKeys();
 
 createInterface();
 CheckVersion();
@@ -4267,11 +4613,7 @@ function parseHeader(header) {
     };
 }
 
-async function decryptData(password, imageArray, dataOffset) {
-    // Извлекаем IV и первый блок AES
-    let hiddenDataHeaderSize = dataOffset + Crypto.IV_SIZE + Crypto.BLOCK_SIZE;
-    let hiddenDataHeader = await Stegano.extractDataFromArray(imageArray, hiddenDataHeaderSize);
-    hiddenDataHeader = hiddenDataHeader.subarray(dataOffset);
+async function decryptData(password, hiddenDataHeader, imageArray, dataOffset) {
     let dataHeader = null;
     try {
         dataHeader = await Crypto.decrypt(password, hiddenDataHeader, true);
@@ -4354,30 +4696,66 @@ async function getImageData(imgArrayBuffer) {
 }
 
 // Возвращает объект скрытого поста
-async function loadPostFromImage(imgArrayBuffer, password, privateKey) {
+async function loadPostFromImage(imgArrayBuffer, passwords, privateKeys) {
     let imageData = await getImageData(imgArrayBuffer);
+
+    let hiddenDataHeader = null;
+    let hiddenDataPrivatePostHeader = null;
+    let rgbCount = imageData.data.length / 4 * 3;
+    if (rgbCount < Crypto.IV_SIZE + Crypto.BLOCK_SIZE) {
+        // Слишком маленький контейнер, это не скрытопост
+        return null;
+    } else if (rgbCount < Crypto.PUBLIC_KEY_SIZE + Crypto.IV_SIZE + Crypto.BLOCK_SIZE) {
+        // Извлекаем заголовок для обычного скрытопоста (IV и первый блок AES)
+        let hiddenDataHeaderSize = Crypto.IV_SIZE + Crypto.BLOCK_SIZE;
+        hiddenDataHeader = await Stegano.extractDataFromArray(imageData.data, hiddenDataHeaderSize);
+    } else {
+        // Извлекаем заголовок для обычного скрытопоста (IV и первый блок AES)
+        // и для приватного скрытопоста (одноразовый публичный ключ, IV и первый блок AES)
+        let hiddenDataHeaderSize = Crypto.PUBLIC_KEY_SIZE + Crypto.IV_SIZE + Crypto.BLOCK_SIZE;
+        hiddenDataPrivatePostHeader = await Stegano.extractDataFromArray(imageData.data, hiddenDataHeaderSize);
+        hiddenDataHeader = hiddenDataPrivatePostHeader.subarray(0, Crypto.IV_SIZE + Crypto.BLOCK_SIZE);
+    }
+
 
     // Пробуем расшифровать как публичный пост
     let isPrivate = false;
-    let decryptedData = await decryptData(password, imageData.data, 0);
-    if (decryptedData == null && privateKey.length > 0) {
+    let decryptedData = null;
+    let correctPassword = null;
+    for (let password of passwords) {
+        decryptedData = await decryptData(password.value, hiddenDataHeader, imageData.data, 0);
+        if (decryptedData) {
+            correctPassword = password.value;
+            break;
+        }
+    }
+
+    let correctPrivateKey = null;
+    if (decryptedData == null && privateKeys.length > 0) {
         isPrivate = true;
-        // Извлекаем одноразовый публичный ключ
-        let hiddenOneTimePublicKey = await Stegano.extractDataFromArray(imageData.data, Crypto.PUBLIC_KEY_SIZE);
         // Генерируем секрет с одноразовым публичным ключом отправителя и своим приватным ключом
+        let hiddenOneTimePublicKey = hiddenDataPrivatePostHeader.subarray(0, Crypto.PUBLIC_KEY_SIZE);
         let oneTimePublicKey = Utils.arrayToBase58(hiddenOneTimePublicKey);
 
-        let secretPassword = null
-        try {
-            secretPassword = await Crypto.deriveSecretKey(privateKey, oneTimePublicKey);
-        }
-        catch (e) {
-            // Не удалось сгенерировать секрет, либо неверный ключ, либо это не скрытопост
-        }
+        for (let privateKey of privateKeys) {
+            let secretPassword = null;
+            try {
+                secretPassword = await Crypto.deriveSecretKey(privateKey.value, oneTimePublicKey);
+            }
+            catch (e) {
+                // Не удалось сгенерировать секрет, либо неверный ключ, либо это не скрытопост
+            }
 
-        if (secretPassword != null) {
-            // Пробуем расшифровать как приватный пост
-            decryptedData = await decryptData(secretPassword, imageData.data, Crypto.PUBLIC_KEY_SIZE);
+            if (secretPassword) {
+                // Пробуем расшифровать как приватный пост
+                decryptedData = await decryptData(secretPassword,
+                    hiddenDataPrivatePostHeader.subarray(Crypto.PUBLIC_KEY_SIZE),
+                    imageData.data, Crypto.PUBLIC_KEY_SIZE);
+                if (decryptedData) {
+                    correctPrivateKey = privateKey.value;
+                    break;
+                }
+            }
         }
     }
 
@@ -4398,6 +4776,8 @@ async function loadPostFromImage(imgArrayBuffer, password, privateKey) {
     let zipData = new Blob([zipDataArray], {type: 'application/zip'});
 
     return {
+        password: correctPassword,
+        privateKey: correctPrivateKey,
         timestamp: decryptedData.header.timestamp,
         publicKey: verifyResult ? verifyResult.publicKey : null,
         isVerified: verifyResult ? verifyResult.isVerified : null,

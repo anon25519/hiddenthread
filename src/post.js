@@ -304,11 +304,7 @@ function parseHeader(header) {
     };
 }
 
-async function decryptData(password, imageArray, dataOffset) {
-    // Извлекаем IV и первый блок AES
-    let hiddenDataHeaderSize = dataOffset + Crypto.IV_SIZE + Crypto.BLOCK_SIZE;
-    let hiddenDataHeader = await Stegano.extractDataFromArray(imageArray, hiddenDataHeaderSize);
-    hiddenDataHeader = hiddenDataHeader.subarray(dataOffset);
+async function decryptData(password, hiddenDataHeader, imageArray, dataOffset) {
     let dataHeader = null;
     try {
         dataHeader = await Crypto.decrypt(password, hiddenDataHeader, true);
@@ -391,30 +387,66 @@ async function getImageData(imgArrayBuffer) {
 }
 
 // Возвращает объект скрытого поста
-async function loadPostFromImage(imgArrayBuffer, password, privateKey) {
+async function loadPostFromImage(imgArrayBuffer, passwords, privateKeys) {
     let imageData = await getImageData(imgArrayBuffer);
+
+    let hiddenDataHeader = null;
+    let hiddenDataPrivatePostHeader = null;
+    let rgbCount = imageData.data.length / 4 * 3;
+    if (rgbCount < Crypto.IV_SIZE + Crypto.BLOCK_SIZE) {
+        // Слишком маленький контейнер, это не скрытопост
+        return null;
+    } else if (rgbCount < Crypto.PUBLIC_KEY_SIZE + Crypto.IV_SIZE + Crypto.BLOCK_SIZE) {
+        // Извлекаем заголовок для обычного скрытопоста (IV и первый блок AES)
+        let hiddenDataHeaderSize = Crypto.IV_SIZE + Crypto.BLOCK_SIZE;
+        hiddenDataHeader = await Stegano.extractDataFromArray(imageData.data, hiddenDataHeaderSize);
+    } else {
+        // Извлекаем заголовок для обычного скрытопоста (IV и первый блок AES)
+        // и для приватного скрытопоста (одноразовый публичный ключ, IV и первый блок AES)
+        let hiddenDataHeaderSize = Crypto.PUBLIC_KEY_SIZE + Crypto.IV_SIZE + Crypto.BLOCK_SIZE;
+        hiddenDataPrivatePostHeader = await Stegano.extractDataFromArray(imageData.data, hiddenDataHeaderSize);
+        hiddenDataHeader = hiddenDataPrivatePostHeader.subarray(0, Crypto.IV_SIZE + Crypto.BLOCK_SIZE);
+    }
+
 
     // Пробуем расшифровать как публичный пост
     let isPrivate = false;
-    let decryptedData = await decryptData(password, imageData.data, 0);
-    if (decryptedData == null && privateKey.length > 0) {
+    let decryptedData = null;
+    let correctPassword = null;
+    for (let password of passwords) {
+        decryptedData = await decryptData(password.value, hiddenDataHeader, imageData.data, 0);
+        if (decryptedData) {
+            correctPassword = password.value;
+            break;
+        }
+    }
+
+    let correctPrivateKey = null;
+    if (decryptedData == null && privateKeys.length > 0) {
         isPrivate = true;
-        // Извлекаем одноразовый публичный ключ
-        let hiddenOneTimePublicKey = await Stegano.extractDataFromArray(imageData.data, Crypto.PUBLIC_KEY_SIZE);
         // Генерируем секрет с одноразовым публичным ключом отправителя и своим приватным ключом
+        let hiddenOneTimePublicKey = hiddenDataPrivatePostHeader.subarray(0, Crypto.PUBLIC_KEY_SIZE);
         let oneTimePublicKey = Utils.arrayToBase58(hiddenOneTimePublicKey);
 
-        let secretPassword = null
-        try {
-            secretPassword = await Crypto.deriveSecretKey(privateKey, oneTimePublicKey);
-        }
-        catch (e) {
-            // Не удалось сгенерировать секрет, либо неверный ключ, либо это не скрытопост
-        }
+        for (let privateKey of privateKeys) {
+            let secretPassword = null;
+            try {
+                secretPassword = await Crypto.deriveSecretKey(privateKey.value, oneTimePublicKey);
+            }
+            catch (e) {
+                // Не удалось сгенерировать секрет, либо неверный ключ, либо это не скрытопост
+            }
 
-        if (secretPassword != null) {
-            // Пробуем расшифровать как приватный пост
-            decryptedData = await decryptData(secretPassword, imageData.data, Crypto.PUBLIC_KEY_SIZE);
+            if (secretPassword) {
+                // Пробуем расшифровать как приватный пост
+                decryptedData = await decryptData(secretPassword,
+                    hiddenDataPrivatePostHeader.subarray(Crypto.PUBLIC_KEY_SIZE),
+                    imageData.data, Crypto.PUBLIC_KEY_SIZE);
+                if (decryptedData) {
+                    correctPrivateKey = privateKey.value;
+                    break;
+                }
+            }
         }
     }
 
@@ -435,6 +467,8 @@ async function loadPostFromImage(imgArrayBuffer, password, privateKey) {
     let zipData = new Blob([zipDataArray], {type: 'application/zip'});
 
     return {
+        password: correctPassword,
+        privateKey: correctPrivateKey,
         timestamp: decryptedData.header.timestamp,
         publicKey: verifyResult ? verifyResult.publicKey : null,
         isVerified: verifyResult ? verifyResult.isVerified : null,
