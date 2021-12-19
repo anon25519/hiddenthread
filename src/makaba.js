@@ -292,8 +292,9 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     Utils.trace(unpackedData);
 
     let clearPost = document.getElementById('post-' + postId);
+    let postBodyDivCount = clearPost.getElementsByClassName('post_type_hiddenthread').length;
     let postBodyDiv = document.createElement('div');
-    postBodyDiv.id = 'hidden_post-body-' + postId;
+    postBodyDiv.id = `hidden_post-body-${postId}${postBodyDivCount > 0 ? '_'+postBodyDivCount : ''}`;
     postBodyDiv.classList.add("post");
     postBodyDiv.classList.add("post_type_reply");
     postBodyDiv.classList.add("post_type_hiddenthread");
@@ -302,7 +303,7 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     let postMetadata = document.createElement('div');
     postMetadata.style = 'font-family: courier new;';
     let postArticle = document.createElement('article');
-    postArticle.id = 'hidden_m' + postId;
+    postArticle.id = `hidden_m${postId}${postBodyDivCount > 0 ? '_'+postBodyDivCount : ''}`;
     postArticle.classList.add("post__message");
 
     let postArticleMessage = document.createElement('div');
@@ -362,14 +363,15 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     if (hiddenPostsRefmap) {
         document.getElementById(`hidden_m${postId}`).insertAdjacentElement('afterend', hiddenPostsRefmap);
     }
+    return postBodyDivCount;
 }
 
 
 // Добавление HTML скрытопоста в объект основного поста (для всплывающих постов)
-function addHiddenPostToObj(postId) {
+function addHiddenPostToObj(postId, hiddenPostSubId) {
     let thread = window.Post(window.thread.id);
     let currentPost = thread.getPostsObj()[String(postId)];
-    let postArticle = document.getElementById('hidden_m' + postId);
+    let postArticle = document.getElementById(`hidden_m${postId}${hiddenPostSubId > 0 ? '_'+hiddenPostSubId : ''}`);
     currentPost.ajax.comment = currentPost.ajax.comment + '<br>' + postArticle.innerHTML;
 }
 
@@ -462,10 +464,10 @@ function parseMessage(message)
 function renderHiddenPost(postId, loadedPost, unpackedData) {
     let res = parseMessage(unpackedData.message);
     unpackedData.message = res.message;
-    addHiddenPostToHtml(postId, loadedPost, unpackedData);
+    let hiddenPostSubId = addHiddenPostToHtml(postId, loadedPost, unpackedData);
     addReplyLinks(postId, res.refPostIdList);
     // TODO: отображение скрытопостов во всплывающих постах с куклоскриптом
-    addHiddenPostToObj(postId); // Текст скрытопоста берется из HTML
+    addHiddenPostToObj(postId, hiddenPostSubId); // Текст скрытопоста берется из HTML
 }
 
 
