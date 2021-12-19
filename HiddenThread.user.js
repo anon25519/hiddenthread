@@ -3922,6 +3922,8 @@ function createInterface() {
                     document.getElementById('hiddenPostInput').value = '';
                     document.getElementById('hiddenFilesInput').value = null;
                 }
+                // Сбрасываем название картинки, чтобы оно не повторялось
+                document.getElementById('htContainerNameSelect').click();
             }
         } catch (e) {
             Utils.trace('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
