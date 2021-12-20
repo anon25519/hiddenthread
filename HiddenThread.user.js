@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.5.4
+// @version      0.5.5
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -2891,7 +2891,7 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5.4";
+const CURRENT_VERSION = "0.5.5";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
@@ -2981,8 +2981,11 @@ async function createHiddenPost() {
     }
 
     let container = null;
+    let pack = null;
     let containerType = document.getElementById('htContainerTypeSelect').selectedIndex;
-    if (containerType == 1) {
+    if (containerType == 0) {
+        pack = document.getElementById('htContainerPackSelect').selectedIndex;
+    } else if (containerType == 1) {
         container = getContainerLocalFile();
         if (!container)
             return;
@@ -2997,7 +3000,8 @@ async function createHiddenPost() {
         {
             'image': container,
             'maxDataRatio': maxDataRatio,
-            'isDownscaleAllowed': isDownscaleAllowed
+            'isDownscaleAllowed': isDownscaleAllowed,
+            'pack': pack
         },
         document.getElementById('hiddenPostInput').value,
         document.getElementById('hiddenFilesInput').files,
@@ -3186,10 +3190,14 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     postBodyDiv.classList.add("post");
     postBodyDiv.classList.add("post_type_reply");
     postBodyDiv.classList.add("post_type_hiddenthread");
+    if (loadedPost.isPrivate)
+        postBodyDiv.classList.add("post_type_ht_private");
+    if (loadedPost.password)
+        postBodyDiv.classList.add("post_type_ht_password");
     postBodyDiv.setAttribute('data-num', String(postId));
 
     let postMetadata = document.createElement('div');
-    postMetadata.style = 'font-family: courier new;';
+    postMetadata.classList.add('hiddenthread_metadata');
     let postArticle = document.createElement('article');
     postArticle.id = `hidden_m${postId}${postBodyDivCount > 0 ? '_'+postBodyDivCount : ''}`;
     postArticle.classList.add("post__message");
@@ -3209,9 +3217,9 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     postMetadata.appendChild(createElementFromHTML(`<div>Дата создания скрытопоста (${tzName}): ${timeString}</div>`));
     if (loadedPost.password)
         postMetadata.appendChild(createElementFromHTML(`<div>Пароль: ${passwordAliases[loadedPost.password]} (`+
-            `<input id="test" readonly="" `+
-            `style="color:var(--theme_default_text);background-color:rgba(0, 0, 0, 0);border:0px;width:9ch;" value="раскрыть" `+
-            `onclick="this.value='${loadedPost.password}';this.style.width='${loadedPost.password.length+1}ch'">)</div>`));
+            `<input readonly="" `+
+            `style="color:var(--theme_default_text);background-color:rgba(0, 0, 0, 0);border:0px;width:8.5ch;" value="раскрыть" `+
+            `onclick="this.value='${loadedPost.password}';this.style.width='${loadedPost.password.length+0.5}ch'">)</div>`));
     if (loadedPost.isPrivate) {
         postMetadata.appendChild(createElementFromHTML(
             `<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом `+
@@ -3602,6 +3610,11 @@ function createManager(managerType) {
         }
         addItemsToSelect(items, `ht${managerType}Select`);
 
+        // Если изменение в паролях или ключах, проверяем старые посты
+        if (managerType == 'Password' || managerType == 'PrivateKey') {
+            isReloadRequested = true;
+        }
+
         document.getElementById(`ht${managerType}ManagerDiv`).innerHTML = '';
     }
 
@@ -3724,6 +3737,12 @@ function createInterface() {
                             <option>сгенерировать</option>
                         </select>
                         </div>
+                        <div id="htContainerPackSelectDiv" class="selectbox"> с
+                        <select id="htContainerPackSelect" class="input select" style="max-width:25ch">
+                            <option>picsum.photos</option>
+                            <option>imagecdn.app</option>
+                        </select>
+                        </div>
                         <div id="htContainerInputDiv">
                             <span>Выбери файл(ы) (из нескольких берется рандомный): </span>
                             <input id="hiddenContainerInput" type="file" multiple="true" />
@@ -3770,6 +3789,9 @@ function createInterface() {
         .post_type_hiddenthread {
             border-left: 3px solid #${storage.postsColor ? storage.postsColor : 'F00000'};
             border-right: 3px solid #${storage.postsColor ? storage.postsColor : 'F00000'};
+        }
+        .hiddenthread_metadata {
+            font-family: courier new;
         }
     `
     style.appendChild(document.createTextNode(css));
@@ -3885,12 +3907,19 @@ function createInterface() {
     document.getElementById('htContainerNameSelect').click();
 
     document.getElementById('htContainerTypeSelect').onclick = function () {
+        document.getElementById('htContainerPackSelectDiv').style.display = (this.selectedIndex == 0) ?
+            'inline-block' : 'none';
         document.getElementById('htContainerInputDiv').style.display = (this.selectedIndex == 1) ?
             'block' : 'none';
         setStorage({ containerType: this.selectedIndex });
     }
     document.getElementById('htContainerTypeSelect').selectedIndex = storage.containerType ? storage.containerType : 0;
     document.getElementById('htContainerTypeSelect').click();
+
+    document.getElementById('htContainerPackSelect').onclick = function () {
+        setStorage({ containerPack: this.selectedIndex });
+    }
+    document.getElementById('htContainerPackSelect').selectedIndex = storage.containerPack ? storage.containerPack : 0;
 
     document.getElementById('htClearFormButton').onclick = function () {
         document.getElementById('hiddenPostInput').value = '';
@@ -4191,6 +4220,7 @@ let watchedImages = new Set();
 // множество ID картинок с загруженными скрытопостами
 let loadedPosts = new Set();
 let scanning = false;
+let isReloadRequested = false;
 /*
 Просмотреть все посты и попробовать расшифровать
 */
@@ -4199,6 +4229,13 @@ async function loadHiddenThread() {
         return; // Чтобы не запускалось в нескольких потоках
     }
     scanning = true;
+
+    // Запрос на сброс загруженных картинок, чтобы проверить их с измененными паролями
+    if (isReloadRequested) {
+        document.getElementById("imagesLoadedCount").textContent = loadedPosts.size;
+        watchedImages = new Set();
+        isReloadRequested = false;
+    }
 
     let postsToScan = getPostsToScan();
 
@@ -4459,7 +4496,7 @@ async function encryptPost(message, files, password, privateKey, otherPublicKey)
     return encryptedData;
 }
 
-async function getRandomContainer(dataLength) {
+async function getRandomContainer(dataLength, pack) {
     const MIN_WIDTH = Utils.getRandomInRange(800-50, 800+50);
     const MAX_WIDTH = Utils.getRandomInRange(3000-200, 3000+200);
     const RATIO = Utils.getRandomInRange(1.2, 2.0, true);
@@ -4486,7 +4523,11 @@ async function getRandomContainer(dataLength) {
     image.crossOrigin = "anonymous";
     try {
         // ?x=... нужно для отключения кэша
-        image.src = `https://picsum.photos/${width}/${height}?x=${Date.now()}`;
+        if (pack == 0) {
+            image.src = `https://picsum.photos/${width}/${height}?x=${Date.now()}`;
+        } else {
+            image.src = `https://random.imagecdn.app/${width}/${height}?x=${Date.now()}`;
+        }
         await image.decode();
     } catch (e) {
         Utils.trace(`HiddenThread: ошибка при загрузке случайного контейнера "${image.src}": ${e}`);
@@ -4498,7 +4539,7 @@ async function getRandomContainer(dataLength) {
 async function createHiddenPostImpl(container, message, files, password, privateKey, otherPublicKey) {
     let encryptedData = await encryptPost(message, files, password, privateKey, otherPublicKey);
     if (!container.image) {
-        container.image = await getRandomContainer(encryptedData.length);
+        container.image = await getRandomContainer(encryptedData.length, container.pack);
     }
     let imageResult = await hideDataToImage(container, encryptedData);
 
