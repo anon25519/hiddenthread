@@ -321,9 +321,9 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     postMetadata.appendChild(createElementFromHTML(`<div>Дата создания скрытопоста (${tzName}): ${timeString}</div>`));
     if (loadedPost.password)
         postMetadata.appendChild(createElementFromHTML(`<div>Пароль: ${passwordAliases[loadedPost.password]} (`+
-            `<input id="test" readonly="" `+
-            `style="color:var(--theme_default_text);background-color:rgba(0, 0, 0, 0);border:0px;width:9ch;" value="раскрыть" `+
-            `onclick="this.value='${loadedPost.password}';this.style.width='${loadedPost.password.length+1}ch'">)</div>`));
+            `<input readonly="" `+
+            `style="color:var(--theme_default_text);background-color:rgba(0, 0, 0, 0);border:0px;width:8.5ch;" value="раскрыть" `+
+            `onclick="this.value='${loadedPost.password}';this.style.width='${loadedPost.password.length+0.5}ch'">)</div>`));
     if (loadedPost.isPrivate) {
         postMetadata.appendChild(createElementFromHTML(
             `<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом `+
@@ -713,6 +713,11 @@ function createManager(managerType) {
             selectOptions[i].remove();
         }
         addItemsToSelect(items, `ht${managerType}Select`);
+
+        // Если изменение в паролях или ключах, проверяем старые посты
+        if (managerType == 'Password' || managerType == 'PrivateKey') {
+            isReloadRequested = true;
+        }
 
         document.getElementById(`ht${managerType}ManagerDiv`).innerHTML = '';
     }
@@ -1303,6 +1308,7 @@ let watchedImages = new Set();
 // множество ID картинок с загруженными скрытопостами
 let loadedPosts = new Set();
 let scanning = false;
+let isReloadRequested = false;
 /*
 Просмотреть все посты и попробовать расшифровать
 */
@@ -1311,6 +1317,13 @@ async function loadHiddenThread() {
         return; // Чтобы не запускалось в нескольких потоках
     }
     scanning = true;
+
+    // Запрос на сброс загруженных картинок, чтобы проверить их с измененными паролями
+    if (isReloadRequested) {
+        document.getElementById("imagesLoadedCount").textContent = loadedPosts.size;
+        watchedImages = new Set();
+        isReloadRequested = false;
+    }
 
     let postsToScan = getPostsToScan();
 
