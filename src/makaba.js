@@ -298,10 +298,14 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     postBodyDiv.classList.add("post");
     postBodyDiv.classList.add("post_type_reply");
     postBodyDiv.classList.add("post_type_hiddenthread");
+    if (loadedPost.isPrivate)
+        postBodyDiv.classList.add("post_type_ht_private");
+    if (loadedPost.password)
+        postBodyDiv.classList.add("post_type_ht_password");
     postBodyDiv.setAttribute('data-num', String(postId));
 
     let postMetadata = document.createElement('div');
-    postMetadata.style = 'font-family: courier new;';
+    postMetadata.classList.add('hiddenthread_metadata');
     let postArticle = document.createElement('article');
     postArticle.id = `hidden_m${postId}${postBodyDivCount > 0 ? '_'+postBodyDivCount : ''}`;
     postArticle.classList.add("post__message");
@@ -887,6 +891,9 @@ function createInterface() {
         .post_type_hiddenthread {
             border-left: 3px solid #${storage.postsColor ? storage.postsColor : 'F00000'};
             border-right: 3px solid #${storage.postsColor ? storage.postsColor : 'F00000'};
+        }
+        .hiddenthread_metadata {
+            font-family: courier new;
         }
     `
     style.appendChild(document.createTextNode(css));
