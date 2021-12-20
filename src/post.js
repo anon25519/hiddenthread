@@ -146,7 +146,7 @@ async function encryptPost(message, files, password, privateKey, otherPublicKey)
     return encryptedData;
 }
 
-async function getRandomContainer(dataLength) {
+async function getRandomContainer(dataLength, pack) {
     const MIN_WIDTH = Utils.getRandomInRange(800-50, 800+50);
     const MAX_WIDTH = Utils.getRandomInRange(3000-200, 3000+200);
     const RATIO = Utils.getRandomInRange(1.2, 2.0, true);
@@ -173,7 +173,11 @@ async function getRandomContainer(dataLength) {
     image.crossOrigin = "anonymous";
     try {
         // ?x=... нужно для отключения кэша
-        image.src = `https://picsum.photos/${width}/${height}?x=${Date.now()}`;
+        if (pack == 0) {
+            image.src = `https://picsum.photos/${width}/${height}?x=${Date.now()}`;
+        } else {
+            image.src = `https://random.imagecdn.app/${width}/${height}?x=${Date.now()}`;
+        }
         await image.decode();
     } catch (e) {
         Utils.trace(`HiddenThread: ошибка при загрузке случайного контейнера "${image.src}": ${e}`);
@@ -185,7 +189,7 @@ async function getRandomContainer(dataLength) {
 async function createHiddenPostImpl(container, message, files, password, privateKey, otherPublicKey) {
     let encryptedData = await encryptPost(message, files, password, privateKey, otherPublicKey);
     if (!container.image) {
-        container.image = await getRandomContainer(encryptedData.length);
+        container.image = await getRandomContainer(encryptedData.length, container.pack);
     }
     let imageResult = await hideDataToImage(container, encryptedData);
 

@@ -93,8 +93,11 @@ async function createHiddenPost() {
     }
 
     let container = null;
+    let pack = null;
     let containerType = document.getElementById('htContainerTypeSelect').selectedIndex;
-    if (containerType == 1) {
+    if (containerType == 0) {
+        pack = document.getElementById('htContainerPackSelect').selectedIndex;
+    } else if (containerType == 1) {
         container = getContainerLocalFile();
         if (!container)
             return;
@@ -109,7 +112,8 @@ async function createHiddenPost() {
         {
             'image': container,
             'maxDataRatio': maxDataRatio,
-            'isDownscaleAllowed': isDownscaleAllowed
+            'isDownscaleAllowed': isDownscaleAllowed,
+            'pack': pack
         },
         document.getElementById('hiddenPostInput').value,
         document.getElementById('hiddenFilesInput').files,
@@ -845,6 +849,12 @@ function createInterface() {
                             <option>сгенерировать</option>
                         </select>
                         </div>
+                        <div id="htContainerPackSelectDiv" class="selectbox"> с
+                        <select id="htContainerPackSelect" class="input select" style="max-width:25ch">
+                            <option>picsum.photos</option>
+                            <option>imagecdn.app</option>
+                        </select>
+                        </div>
                         <div id="htContainerInputDiv">
                             <span>Выбери файл(ы) (из нескольких берется рандомный): </span>
                             <input id="hiddenContainerInput" type="file" multiple="true" />
@@ -1009,12 +1019,19 @@ function createInterface() {
     document.getElementById('htContainerNameSelect').click();
 
     document.getElementById('htContainerTypeSelect').onclick = function () {
+        document.getElementById('htContainerPackSelectDiv').style.display = (this.selectedIndex == 0) ?
+            'inline-block' : 'none';
         document.getElementById('htContainerInputDiv').style.display = (this.selectedIndex == 1) ?
             'block' : 'none';
         setStorage({ containerType: this.selectedIndex });
     }
     document.getElementById('htContainerTypeSelect').selectedIndex = storage.containerType ? storage.containerType : 0;
     document.getElementById('htContainerTypeSelect').click();
+
+    document.getElementById('htContainerPackSelect').onclick = function () {
+        setStorage({ containerPack: this.selectedIndex });
+    }
+    document.getElementById('htContainerPackSelect').selectedIndex = storage.containerPack ? storage.containerPack : 0;
 
     document.getElementById('htClearFormButton').onclick = function () {
         document.getElementById('hiddenPostInput').value = '';
