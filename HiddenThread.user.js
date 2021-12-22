@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.5.5
+// @version      0.5.6
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -2891,11 +2891,13 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5.5";
+const CURRENT_VERSION = "0.5.6";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
 const STORAGE_KEY = "hiddenThread";
+
+const MAX_IMAGE_RES_DEFAULT = 25; // 5k * 5k пикселей
 
 let getStorage = () => {
     let storage = localStorage.getItem(STORAGE_KEY) || "{}";
@@ -3376,7 +3378,19 @@ async function loadAndRenderPost(postId, url, passwords, privateKeys) {
     document.getElementById("imagesLoadedCount").textContent =
         parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
 
-    let loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys);
+    let loadedPost = null;
+    if (storage.isQueueDecodeDisabled) {
+        loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys);
+    } else {
+        function promiseGenerator()
+        {
+            return new Promise(async function(resolve, reject) {
+                loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys);
+                resolve();
+            });
+        }
+        await Utils.Queue.enqueue(promiseGenerator);
+    }
 
     if (!loadedPost)
         return loadedPost;
@@ -3812,9 +3826,11 @@ function createInterface() {
             <div>
                 <div><input id="htIsDebugLogEnabled" type="checkbox"> <span>Включить debug-лог</span></div>
                 <div><input id="htIsQueueLoadEnabled" type="checkbox"> <span>Включить последовательную загрузку скрытопостов</span></div>
+                <div><input id="htIsQueueDecodeDisabled" type="checkbox"> <span>Включить параллельное декодирование скрытопостов</span></div>
                 <div><input id="htIsPreviewDisabled" type="checkbox"> <span>Отключить превью картинок в скрытопостах</span></div>
                 <div><input id="htIsFormClearEnabled" type="checkbox"> <span>Включить очистку полей при создании картинки</span></div>
                 <div><input id="htPostsColor" maxlength="6" size="6"> <span>Цвет выделения скрытопостов (в hex)</span></div>
+                <div><input id="htMaxImageRes" type="number" min="0" step="1" size="12"> <span>Макс. разрешение загружаемых картинок, Мп (0 - без лимита)</span></div>
                 <div><input id="htMaxCachedPostSize" type="number" min="0" step="1" size="12"> <span>Макс. размер поста в кэше, Кб (0 - без лимита)</span></div>
                 <div><input id="htMaxCacheSize" type="number" min="0" step="1" size="12"> <span>Макс. размер кэша, Мб (0 - кэш выключен)</span></div>
                 <div>Текущий размер кэша: <span id="htCacheSize">???</span></div>
@@ -3833,9 +3849,12 @@ function createInterface() {
         let settingsWindow = document.getElementById('hiddenThreadSettingsWindow');
         document.getElementById("htIsDebugLogEnabled").checked = storage.isDebugLogEnabled;
         document.getElementById("htIsQueueLoadEnabled").checked = storage.isQueueLoadEnabled;
+        document.getElementById("htIsQueueDecodeDisabled").checked = storage.isQueueDecodeDisabled;
         document.getElementById("htIsPreviewDisabled").checked = storage.isPreviewDisabled;
         document.getElementById("htIsFormClearEnabled").checked = storage.isFormClearEnabled;
         document.getElementById("htPostsColor").value = storage.postsColor ? storage.postsColor : 'F00000';
+        document.getElementById("htMaxImageRes").value = storage.maxImageRes ? storage.maxImageRes :
+            (typeof(storage.maxImageRes) == 'number' ? 0 : MAX_IMAGE_RES_DEFAULT);
         document.getElementById("htMaxCachedPostSize").value = storage.maxCachedPostSize ? storage.maxCachedPostSize : 0;
         document.getElementById("htMaxCacheSize").value = storage.maxCacheSize ? storage.maxCacheSize : 0;
         settingsWindow.style.display = settingsWindow.style.display == 'none' ? 'block' : 'none';
@@ -3846,9 +3865,12 @@ function createInterface() {
     document.getElementById("hiddenThreadSettingsSave").onclick = function() {
         setStorage({ isDebugLogEnabled: document.getElementById("htIsDebugLogEnabled").checked });
         setStorage({ isQueueLoadEnabled: document.getElementById("htIsQueueLoadEnabled").checked });
+        setStorage({ isQueueDecodeDisabled: document.getElementById("htIsQueueDecodeDisabled").checked });
         setStorage({ isPreviewDisabled: document.getElementById("htIsPreviewDisabled").checked });
         setStorage({ isFormClearEnabled: document.getElementById("htIsFormClearEnabled").checked });
         setStorage({ postsColor: document.getElementById("htPostsColor").value });
+        let maxImageRes = parseInt(document.getElementById("htMaxImageRes").value);
+        setStorage({ maxImageRes: maxImageRes ? maxImageRes : (typeof(maxImageRes) == 'number' ? 0 : MAX_IMAGE_RES_DEFAULT) });
         let maxCachedPostSize = parseInt(document.getElementById("htMaxCachedPostSize").value);
         setStorage({ maxCachedPostSize: maxCachedPostSize ? maxCachedPostSize : 0 });
         let maxCacheSize = parseInt(document.getElementById("htMaxCacheSize").value);
@@ -4157,14 +4179,14 @@ function getPostsToScan()
 
         let postFiles = postAjax.files;
 
-        let urls = [];
+        let images = [];
         for (let file of postFiles) {
             if (file.path.endsWith('.png')) {
-                urls.push(file.path);
+                images.push({ url: file.path, width: file.width, height: file.height });
             }
         }
         postsToScan.push({
-            urls: urls,
+            images: images,
             postId: postId
         });
     }
@@ -4178,17 +4200,19 @@ function getPostsToScanFromHtml() {
 
     for (let post of posts) {
         let postImages = post.getElementsByClassName('post__images');
-        let urls = [];
+        let images = [];
         for (let img of postImages) {
             let urlsHtml = img.getElementsByClassName('post__image-link');
             for (let url of urlsHtml) {
                 if (url.href.endsWith('.png')) {
-                    urls.push(url.href);
+                    let imgEl = url.children[0];
+                    images.push({ url: url.href, width: parseInt(imgEl.getAttribute('data-width')),
+                        height: parseInt(imgEl.getAttribute('data-height')) });
                 }
             }
         }
         postsToScan.push({
-            urls: urls,
+            images: images,
             postId: post.getAttribute('data-num')
         });
     }
@@ -4256,17 +4280,23 @@ async function loadHiddenThread() {
 
     let loadPostPromises = [];
     for (let post of postsToScan) {
-        for (let url of post.urls) {
-            let imgId = getImgName(url);
+        for (let image of post.images) {
+            let imgId = getImgName(image.url);
             if (loadedPosts.has(imgId) || watchedImages.has(imgId)) {
                 continue;
             }
             watchedImages.add(imgId);
 
+            let pixelLimit = storage.maxImageRes ? (storage.maxImageRes) :
+                (typeof(storage.maxImageRes) == 'number' ? 0 : MAX_IMAGE_RES_DEFAULT);
+            pixelLimit = pixelLimit * 1000000;
+            if (pixelLimit > 0 && image.width * image.height > pixelLimit)
+                continue;
+
             function promiseGenerator() {
                 return new Promise(async function(resolve, reject) {
                     try {
-                        await loadPost(post.postId, url, actualPasswords, privateKeys, passwordHashes, privateKeyHashes);
+                        await loadPost(post.postId, image.url, actualPasswords, privateKeys, passwordHashes, privateKeyHashes);
                     }
                     catch(e) {
                         Utils.trace('HiddenThread: Ошибка при загрузке поста: ' + e + ' stack:\n' + e.stack);
@@ -4320,7 +4350,7 @@ function loadPasswordsAndKeys() {
 function getImagesCount(postsToScan) {
     let r = 0;
     for (let i = 0; i < postsToScan.length; i++) {
-        r += postsToScan[i].urls.length;
+        r += postsToScan[i].images.length;
     }
     return r;
 }
@@ -5241,6 +5271,52 @@ function trace(s) {
     console.log(s);
 }
 
+// https://medium.com/@karenmarkosyan/how-to-manage-promises-into-dynamic-queue-with-vanilla-javascript-9d0d1f8d4df5
+class Queue {
+    static queue = [];
+    static pendingPromise = false;
+
+    static enqueue(promise) {
+      return new Promise((resolve, reject) => {
+          this.queue.push({
+              promise,
+              resolve,
+              reject,
+          });
+          this.dequeue();
+      });
+    }
+
+  static dequeue() {
+      if (this.workingOnPromise) {
+        return false;
+      }
+      const item = this.queue.shift();
+      if (!item) {
+        return false;
+      }
+      try {
+        this.workingOnPromise = true;
+        item.promise()
+          .then((value) => {
+            this.workingOnPromise = false;
+            item.resolve(value);
+            this.dequeue();
+          })
+          .catch(err => {
+            this.workingOnPromise = false;
+            item.reject(err);
+            this.dequeue();
+          })
+      } catch (err) {
+        this.workingOnPromise = false;
+        item.reject(err);
+        this.dequeue();
+      }
+      return true;
+    }
+}
+
 
 module.exports.arrayToBase58 = arrayToBase58
 module.exports.base58ToArray = base58ToArray
@@ -5251,5 +5327,6 @@ module.exports.shuffleArray = shuffleArray
 module.exports.getHumanReadableSize = getHumanReadableSize
 module.exports.getRandomInRange = getRandomInRange
 module.exports.trace = trace
+module.exports.Queue = Queue
 
 },{}]},{},[11]);
