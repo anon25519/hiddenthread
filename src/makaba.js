@@ -9,6 +9,8 @@ const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/Hidden
 
 const STORAGE_KEY = "hiddenThread";
 
+const MAX_IMAGE_RES_DEFAULT = 25; // 5k * 5k пикселей
+
 let getStorage = () => {
     let storage = localStorage.getItem(STORAGE_KEY) || "{}";
     return JSON.parse(storage);
@@ -940,6 +942,7 @@ function createInterface() {
                 <div><input id="htIsPreviewDisabled" type="checkbox"> <span>Отключить превью картинок в скрытопостах</span></div>
                 <div><input id="htIsFormClearEnabled" type="checkbox"> <span>Включить очистку полей при создании картинки</span></div>
                 <div><input id="htPostsColor" maxlength="6" size="6"> <span>Цвет выделения скрытопостов (в hex)</span></div>
+                <div><input id="htMaxImageRes" type="number" min="0" step="1" size="12"> <span>Макс. разрешение загружаемых картинок, Мп (0 - без лимита)</span></div>
                 <div><input id="htMaxCachedPostSize" type="number" min="0" step="1" size="12"> <span>Макс. размер поста в кэше, Кб (0 - без лимита)</span></div>
                 <div><input id="htMaxCacheSize" type="number" min="0" step="1" size="12"> <span>Макс. размер кэша, Мб (0 - кэш выключен)</span></div>
                 <div>Текущий размер кэша: <span id="htCacheSize">???</span></div>
@@ -962,6 +965,8 @@ function createInterface() {
         document.getElementById("htIsPreviewDisabled").checked = storage.isPreviewDisabled;
         document.getElementById("htIsFormClearEnabled").checked = storage.isFormClearEnabled;
         document.getElementById("htPostsColor").value = storage.postsColor ? storage.postsColor : 'F00000';
+        document.getElementById("htMaxImageRes").value = storage.maxImageRes ? storage.maxImageRes :
+            (typeof(storage.maxImageRes) == 'number' ? 0 : MAX_IMAGE_RES_DEFAULT);
         document.getElementById("htMaxCachedPostSize").value = storage.maxCachedPostSize ? storage.maxCachedPostSize : 0;
         document.getElementById("htMaxCacheSize").value = storage.maxCacheSize ? storage.maxCacheSize : 0;
         settingsWindow.style.display = settingsWindow.style.display == 'none' ? 'block' : 'none';
@@ -976,6 +981,8 @@ function createInterface() {
         setStorage({ isPreviewDisabled: document.getElementById("htIsPreviewDisabled").checked });
         setStorage({ isFormClearEnabled: document.getElementById("htIsFormClearEnabled").checked });
         setStorage({ postsColor: document.getElementById("htPostsColor").value });
+        let maxImageRes = parseInt(document.getElementById("htMaxImageRes").value);
+        setStorage({ maxImageRes: maxImageRes ? maxImageRes : (typeof(maxImageRes) == 'number' ? 0 : MAX_IMAGE_RES_DEFAULT) });
         let maxCachedPostSize = parseInt(document.getElementById("htMaxCachedPostSize").value);
         setStorage({ maxCachedPostSize: maxCachedPostSize ? maxCachedPostSize : 0 });
         let maxCacheSize = parseInt(document.getElementById("htMaxCacheSize").value);
@@ -1284,14 +1291,14 @@ function getPostsToScan()
 
         let postFiles = postAjax.files;
 
-        let urls = [];
+        let images = [];
         for (let file of postFiles) {
             if (file.path.endsWith('.png')) {
-                urls.push(file.path);
+                images.push({ url: file.path, width: file.width, height: file.height });
             }
         }
         postsToScan.push({
-            urls: urls,
+            images: images,
             postId: postId
         });
     }
@@ -1305,17 +1312,19 @@ function getPostsToScanFromHtml() {
 
     for (let post of posts) {
         let postImages = post.getElementsByClassName('post__images');
-        let urls = [];
+        let images = [];
         for (let img of postImages) {
             let urlsHtml = img.getElementsByClassName('post__image-link');
             for (let url of urlsHtml) {
                 if (url.href.endsWith('.png')) {
-                    urls.push(url.href);
+                    let imgEl = url.children[0];
+                    images.push({ url: url.href, width: parseInt(imgEl.getAttribute('data-width')),
+                        height: parseInt(imgEl.getAttribute('data-height')) });
                 }
             }
         }
         postsToScan.push({
-            urls: urls,
+            images: images,
             postId: post.getAttribute('data-num')
         });
     }
@@ -1383,17 +1392,23 @@ async function loadHiddenThread() {
 
     let loadPostPromises = [];
     for (let post of postsToScan) {
-        for (let url of post.urls) {
-            let imgId = getImgName(url);
+        for (let image of post.images) {
+            let imgId = getImgName(image.url);
             if (loadedPosts.has(imgId) || watchedImages.has(imgId)) {
                 continue;
             }
             watchedImages.add(imgId);
 
+            let pixelLimit = storage.maxImageRes ? (storage.maxImageRes) :
+                (typeof(storage.maxImageRes) == 'number' ? 0 : MAX_IMAGE_RES_DEFAULT);
+            pixelLimit = pixelLimit * 1000000;
+            if (pixelLimit > 0 && image.width * image.height > pixelLimit)
+                continue;
+
             function promiseGenerator() {
                 return new Promise(async function(resolve, reject) {
                     try {
-                        await loadPost(post.postId, url, actualPasswords, privateKeys, passwordHashes, privateKeyHashes);
+                        await loadPost(post.postId, image.url, actualPasswords, privateKeys, passwordHashes, privateKeyHashes);
                     }
                     catch(e) {
                         Utils.trace('HiddenThread: Ошибка при загрузке поста: ' + e + ' stack:\n' + e.stack);
@@ -1447,7 +1462,7 @@ function loadPasswordsAndKeys() {
 function getImagesCount(postsToScan) {
     let r = 0;
     for (let i = 0; i < postsToScan.length; i++) {
-        r += postsToScan[i].urls.length;
+        r += postsToScan[i].images.length;
     }
     return r;
 }
