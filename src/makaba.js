@@ -488,7 +488,19 @@ async function loadAndRenderPost(postId, url, passwords, privateKeys) {
     document.getElementById("imagesLoadedCount").textContent =
         parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
 
-    let loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys);
+    let loadedPost = null;
+    if (storage.isQueueDecodeDisabled) {
+        loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys);
+    } else {
+        function promiseGenerator()
+        {
+            return new Promise(async function(resolve, reject) {
+                loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys);
+                resolve();
+            });
+        }
+        await Utils.Queue.enqueue(promiseGenerator);
+    }
 
     if (!loadedPost)
         return loadedPost;
@@ -924,6 +936,7 @@ function createInterface() {
             <div>
                 <div><input id="htIsDebugLogEnabled" type="checkbox"> <span>Включить debug-лог</span></div>
                 <div><input id="htIsQueueLoadEnabled" type="checkbox"> <span>Включить последовательную загрузку скрытопостов</span></div>
+                <div><input id="htIsQueueDecodeDisabled" type="checkbox"> <span>Включить параллельное декодирование скрытопостов</span></div>
                 <div><input id="htIsPreviewDisabled" type="checkbox"> <span>Отключить превью картинок в скрытопостах</span></div>
                 <div><input id="htIsFormClearEnabled" type="checkbox"> <span>Включить очистку полей при создании картинки</span></div>
                 <div><input id="htPostsColor" maxlength="6" size="6"> <span>Цвет выделения скрытопостов (в hex)</span></div>
@@ -945,6 +958,7 @@ function createInterface() {
         let settingsWindow = document.getElementById('hiddenThreadSettingsWindow');
         document.getElementById("htIsDebugLogEnabled").checked = storage.isDebugLogEnabled;
         document.getElementById("htIsQueueLoadEnabled").checked = storage.isQueueLoadEnabled;
+        document.getElementById("htIsQueueDecodeDisabled").checked = storage.isQueueDecodeDisabled;
         document.getElementById("htIsPreviewDisabled").checked = storage.isPreviewDisabled;
         document.getElementById("htIsFormClearEnabled").checked = storage.isFormClearEnabled;
         document.getElementById("htPostsColor").value = storage.postsColor ? storage.postsColor : 'F00000';
@@ -958,6 +972,7 @@ function createInterface() {
     document.getElementById("hiddenThreadSettingsSave").onclick = function() {
         setStorage({ isDebugLogEnabled: document.getElementById("htIsDebugLogEnabled").checked });
         setStorage({ isQueueLoadEnabled: document.getElementById("htIsQueueLoadEnabled").checked });
+        setStorage({ isQueueDecodeDisabled: document.getElementById("htIsQueueDecodeDisabled").checked });
         setStorage({ isPreviewDisabled: document.getElementById("htIsPreviewDisabled").checked });
         setStorage({ isFormClearEnabled: document.getElementById("htIsFormClearEnabled").checked });
         setStorage({ postsColor: document.getElementById("htPostsColor").value });
