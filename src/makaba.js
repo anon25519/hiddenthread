@@ -96,14 +96,17 @@ async function createHiddenPost() {
 
     let container = null;
     let pack = null;
+    let url = null;
     let containerType = document.getElementById('htContainerTypeSelect').selectedIndex;
     if (containerType == 0) {
         pack = document.getElementById('htContainerPackSelect').selectedIndex;
     } else if (containerType == 1) {
+        url = document.getElementById('htContainerLinkInput').value;
+    } else if (containerType == 2) {
         container = getContainerLocalFile();
         if (!container)
             return;
-    } else if (containerType == 2) {
+    } else if (containerType == 3) {
         // Для генерации создаем пустую картинку 1x1
         container = new ImageData(new Uint8ClampedArray(4), 1, 1);
         // Если не выбран процент заполнения, заполняем всё
@@ -115,7 +118,8 @@ async function createHiddenPost() {
             'image': container,
             'maxDataRatio': maxDataRatio,
             'isDownscaleAllowed': isDownscaleAllowed,
-            'pack': pack
+            'pack': pack,
+            'url': url
         },
         document.getElementById('hiddenPostInput').value,
         document.getElementById('hiddenFilesInput').files,
@@ -859,6 +863,7 @@ function createInterface() {
                         <div class="selectbox">
                         <select id="htContainerTypeSelect" class="input select" style="max-width:25ch">
                             <option>загрузить случайную</option>
+                            <option>загрузить по ссылке</option>
                             <option>выбрать свою</option>
                             <option>сгенерировать</option>
                         </select>
@@ -874,8 +879,11 @@ function createInterface() {
                             <input id="hiddenContainerInput" type="file" multiple="true" />
                             <br><br>
                         </div>
+                        <div id="htContainerLinkDiv" style="padding-top:5px;">
+                            <input id="htContainerLinkInput" placeholder="Ссылка на картинку" autocomplete="off" style="max-width:50ch;width:100%" />
+                        </div>
                     </div>
-                    <div>
+                    <div style="padding-top:5px;">
                         <span style="margin-right: 5px">Имя картинки:</span>
                         <div class="selectbox">
                         <select id="htContainerNameSelect" class="input select" style="max-width:15ch">
@@ -1043,7 +1051,9 @@ function createInterface() {
     document.getElementById('htContainerTypeSelect').onclick = function () {
         document.getElementById('htContainerPackSelectDiv').style.display = (this.selectedIndex == 0) ?
             'inline-block' : 'none';
-        document.getElementById('htContainerInputDiv').style.display = (this.selectedIndex == 1) ?
+        document.getElementById('htContainerLinkDiv').style.display = (this.selectedIndex == 1) ?
+            'block' : 'none';
+        document.getElementById('htContainerInputDiv').style.display = (this.selectedIndex == 2) ?
             'block' : 'none';
         setStorage({ containerType: this.selectedIndex });
     }

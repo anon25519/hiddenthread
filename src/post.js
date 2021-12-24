@@ -146,6 +146,19 @@ async function encryptPost(message, files, password, privateKey, otherPublicKey)
     return encryptedData;
 }
 
+async function getContainer(url) {
+    let image = new Image();
+    image.crossOrigin = "anonymous";
+    try {
+        image.src = url;
+        await image.decode();
+    } catch (e) {
+        Utils.trace(`HiddenThread: ошибка при загрузке контейнера по ссылке "${image.src}": ${e}`);
+        throw new Error('Не удалось загрузить контейнер по ссылке. Попробуйте ещё раз или выберите другую картинку.');
+    }
+    return image;
+}
+
 async function getRandomContainer(dataLength, pack) {
     const MIN_WIDTH = Utils.getRandomInRange(800-50, 800+50);
     const MAX_WIDTH = Utils.getRandomInRange(3000-200, 3000+200);
@@ -189,7 +202,13 @@ async function getRandomContainer(dataLength, pack) {
 async function createHiddenPostImpl(container, message, files, password, privateKey, otherPublicKey) {
     let encryptedData = await encryptPost(message, files, password, privateKey, otherPublicKey);
     if (!container.image) {
-        container.image = await getRandomContainer(encryptedData.length, container.pack);
+        if (typeof(container.pack) == 'number') {
+            container.image = await getRandomContainer(encryptedData.length, container.pack);
+        } else if (container.url) {
+            container.image = await getContainer(container.url);
+        } else {
+            throw new Error('Введите ссылку для загрузки контейнера!');
+        }
     }
     let imageResult = await hideDataToImage(container, encryptedData);
 
