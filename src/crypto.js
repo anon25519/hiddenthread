@@ -89,14 +89,17 @@ async function decrypt(password, data, onlyFirstBlock) {
 // ECC
 
 function importPublicKeyArrayFromPrivateKey(privateKeyBase58) {
-    // WebCrypto не умеет получать публичный ключ из приватного, поэтому используется elliptic.js
+    let privateKeyArray = Utils.base58ToArray(privateKeyBase58);
+    if (!privateKeyArray || privateKeyArray.length != 32)
+        throw new Error('Неверный формат приватного ключа! Ожидалось 32 байта в кодировке base58');
     try {
+        // WebCrypto не умеет получать публичный ключ из приватного, поэтому используется elliptic.js
         let e = new Elliptic.ec('p256')
-        let publicKeyArray = e.keyFromPrivate(Utils.base58ToArray(privateKeyBase58)).getPublic().encode();
+        let publicKeyArray = e.keyFromPrivate(privateKeyArray).getPublic().encode();
         return new Uint8Array(publicKeyArray);
     }
     catch (e) {
-        throw new Error('Не удалось получить публичный ключ из приватного: ' + e + ' stack:\n' + e.stack);
+        throw new Error('Не удалось получить публичный ключ из приватного: ' + e + '. stack:\n' + e.stack);
     }
 }
 
@@ -217,22 +220,30 @@ async function verify(publicKey, signature, data) {
 }
 
 async function deriveSecretKey(privateKeyBase58, publicKeyBase58) {
-    let secret = await window.crypto.subtle.deriveKey(
-        {
-            name: "ECDH",
-            public: await importPublicKey(Utils.base58ToArray(publicKeyBase58), false)
-        },
-        await importPrivateKey(privateKeyBase58, false),
-        {
-            name: "AES-CBC",
-            length: 256
-        },
-        true,
-        ["encrypt", "decrypt"]
-    );
+    let publicKeyArray = Utils.base58ToArray(publicKeyBase58);
+    if (!publicKeyArray || publicKeyArray.length != PUBLIC_KEY_SIZE)
+        throw new Error(`Неверный формат публичного ключа! Ожидалось ${PUBLIC_KEY_SIZE} байт в кодировке base58.`);
 
-    let secretRaw = await window.crypto.subtle.exportKey('raw', secret);
-    return Utils.arrayToBase58(new Uint8Array(secretRaw));
+    try {
+        let secret = await window.crypto.subtle.deriveKey(
+            {
+                name: "ECDH",
+                public: await importPublicKey(publicKeyArray, false)
+            },
+            await importPrivateKey(privateKeyBase58, false),
+            {
+                name: "AES-CBC",
+                length: 256
+            },
+            true,
+            ["encrypt", "decrypt"]
+        );
+    
+        let secretRaw = await window.crypto.subtle.exportKey('raw', secret);
+        return Utils.arrayToBase58(new Uint8Array(secretRaw));
+    } catch (e) {
+        throw new Error('Не удалось сгенерировать секрет (указан неверный публичный ключ?): ' + e + '. stack:\n' + e.stack);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
