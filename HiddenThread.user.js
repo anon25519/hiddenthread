@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.5.6
+// @version      0.5.7
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -2710,14 +2710,17 @@ async function decrypt(password, data, onlyFirstBlock) {
 // ECC
 
 function importPublicKeyArrayFromPrivateKey(privateKeyBase58) {
-    // WebCrypto не умеет получать публичный ключ из приватного, поэтому используется elliptic.js
+    let privateKeyArray = Utils.base58ToArray(privateKeyBase58);
+    if (!privateKeyArray || privateKeyArray.length != 32)
+        throw new Error('Неверный формат приватного ключа! Ожидалось 32 байта в кодировке base58');
     try {
+        // WebCrypto не умеет получать публичный ключ из приватного, поэтому используется elliptic.js
         let e = new Elliptic.ec('p256')
-        let publicKeyArray = e.keyFromPrivate(Utils.base58ToArray(privateKeyBase58)).getPublic().encode();
+        let publicKeyArray = e.keyFromPrivate(privateKeyArray).getPublic().encode();
         return new Uint8Array(publicKeyArray);
     }
     catch (e) {
-        throw new Error('Не удалось получить публичный ключ из приватного: ' + e + ' stack:\n' + e.stack);
+        throw new Error('Не удалось получить публичный ключ из приватного: ' + e + '. stack:\n' + e.stack);
     }
 }
 
@@ -2838,22 +2841,30 @@ async function verify(publicKey, signature, data) {
 }
 
 async function deriveSecretKey(privateKeyBase58, publicKeyBase58) {
-    let secret = await window.crypto.subtle.deriveKey(
-        {
-            name: "ECDH",
-            public: await importPublicKey(Utils.base58ToArray(publicKeyBase58), false)
-        },
-        await importPrivateKey(privateKeyBase58, false),
-        {
-            name: "AES-CBC",
-            length: 256
-        },
-        true,
-        ["encrypt", "decrypt"]
-    );
+    let publicKeyArray = Utils.base58ToArray(publicKeyBase58);
+    if (!publicKeyArray || publicKeyArray.length != PUBLIC_KEY_SIZE)
+        throw new Error(`Неверный формат публичного ключа! Ожидалось ${PUBLIC_KEY_SIZE} байт в кодировке base58.`);
 
-    let secretRaw = await window.crypto.subtle.exportKey('raw', secret);
-    return Utils.arrayToBase58(new Uint8Array(secretRaw));
+    try {
+        let secret = await window.crypto.subtle.deriveKey(
+            {
+                name: "ECDH",
+                public: await importPublicKey(publicKeyArray, false)
+            },
+            await importPrivateKey(privateKeyBase58, false),
+            {
+                name: "AES-CBC",
+                length: 256
+            },
+            true,
+            ["encrypt", "decrypt"]
+        );
+    
+        let secretRaw = await window.crypto.subtle.exportKey('raw', secret);
+        return Utils.arrayToBase58(new Uint8Array(secretRaw));
+    } catch (e) {
+        throw new Error('Не удалось сгенерировать секрет (указан неверный публичный ключ?): ' + e + '. stack:\n' + e.stack);
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -2891,7 +2902,7 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5.6";
+const CURRENT_VERSION = "0.5.7";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
@@ -2976,34 +2987,59 @@ async function createHiddenPost() {
     let imageContainerDiv = document.getElementById('imageContainerDiv');
     imageContainerDiv.innerHTML = '';
 
-    let maxDataRatio = 0;
-    let isDownscaleAllowed = document.getElementById('isDownscaleAllowed').checked;
-    if (document.getElementById('isDataRatioLimited').checked) {
-        maxDataRatio = Math.min(Math.max(parseInt(document.getElementById('maxDataRatio').value), 1), 100) / 100;
-    }
+    setStorage({ thresholdDataRatio: document.getElementById('htThresholdDataRatio').value });
+    setStorage({ maxDataRatio: document.getElementById('htMaxDataRatio').value });
+    setStorage({ minPixelCount: document.getElementById('htMinPixelCount').value });
+    setStorage({ minPixelCountDeviance: document.getElementById('htMinPixelCountDeviance').value });
+    setStorage({ maxPixelCount: document.getElementById('htMaxPixelCount').value });
+    setStorage({ maxPixelCountDeviance: document.getElementById('htMaxPixelCountDeviance').value });
+    setStorage({ minWidth: document.getElementById('htMinWidth').value });
+    setStorage({ minWidthDeviance: document.getElementById('htMinWidthDeviance').value });
+    setStorage({ maxWidth: document.getElementById('htMaxWidth').value });
+    setStorage({ maxWidthDeviance: document.getElementById('htMaxWidthDeviance').value });
+    setStorage({ minHeight: document.getElementById('htMinHeight').value });
+    setStorage({ minHeightDeviance: document.getElementById('htMinHeightDeviance').value });
+    setStorage({ maxHeight: document.getElementById('htMaxHeight').value });
+    setStorage({ maxHeightDeviance: document.getElementById('htMaxHeightDeviance').value });
 
     let container = null;
     let pack = null;
+    let url = null;
     let containerType = document.getElementById('htContainerTypeSelect').selectedIndex;
     if (containerType == 0) {
         pack = document.getElementById('htContainerPackSelect').selectedIndex;
     } else if (containerType == 1) {
+        url = document.getElementById('htContainerLinkInput').value;
+    } else if (containerType == 2) {
         container = getContainerLocalFile();
         if (!container)
             return;
-    } else if (containerType == 2) {
+    } else if (containerType == 3) {
         // Для генерации создаем пустую картинку 1x1
         container = new ImageData(new Uint8ClampedArray(4), 1, 1);
-        // Если не выбран процент заполнения, заполняем всё
-        if (maxDataRatio == 0) maxDataRatio = 1;
     }
 
     let imageResult = await Post.createHiddenPostImpl(
         {
-            'image': container,
-            'maxDataRatio': maxDataRatio,
-            'isDownscaleAllowed': isDownscaleAllowed,
-            'pack': pack
+            image: container,
+            pack: pack,
+            url: url,
+            isAdjustResolution: document.getElementById('htIsAdjustResolution').checked,
+            thresholdDataRatio: parseInt(document.getElementById('htThresholdDataRatio').value) / 100,
+            maxDataRatio: parseInt(document.getElementById('htMaxDataRatio').value) / 100,
+            pixelCountAdjust: document.querySelector('input[name="pixelCountAdjust"]:checked').value,
+            minPixelCount: parseInt(document.getElementById('htMinPixelCount').value),
+            minPixelCountDeviance: parseInt(document.getElementById('htMinPixelCountDeviance').value) / 100,
+            maxPixelCount: parseInt(document.getElementById('htMaxPixelCount').value),
+            maxPixelCountDeviance: parseInt(document.getElementById('htMaxPixelCountDeviance').value) / 100,
+            minWidth: parseInt(document.getElementById('htMinWidth').value),
+            minWidthDeviance: parseInt(document.getElementById('htMinWidthDeviance').value) / 100,
+            maxWidth: parseInt(document.getElementById('htMaxWidth').value),
+            maxWidthDeviance: parseInt(document.getElementById('htMaxWidthDeviance').value) / 100,
+            minHeight: parseInt(document.getElementById('htMinHeight').value),
+            minHeightDeviance: parseInt(document.getElementById('htMinHeightDeviance').value) / 100,
+            maxHeight: parseInt(document.getElementById('htMaxHeight').value),
+            maxHeightDeviance: parseInt(document.getElementById('htMaxHeightDeviance').value) / 100,
         },
         document.getElementById('hiddenPostInput').value,
         document.getElementById('hiddenFilesInput').files,
@@ -3021,7 +3057,7 @@ async function createHiddenPost() {
 
     // Вставляем картинку в форму для отображения пользователю
     let img = document.createElement('img');
-    img.style = "max-width: 300px;";
+    img.style = "max-width: 300px; max-height: 300px;";
     let imgUrl = URL.createObjectURL(blob);
     
     img.src = imgUrl;
@@ -3747,6 +3783,7 @@ function createInterface() {
                         <div class="selectbox">
                         <select id="htContainerTypeSelect" class="input select" style="max-width:25ch">
                             <option>загрузить случайную</option>
+                            <option>загрузить по ссылке</option>
                             <option>выбрать свою</option>
                             <option>сгенерировать</option>
                         </select>
@@ -3755,6 +3792,8 @@ function createInterface() {
                         <select id="htContainerPackSelect" class="input select" style="max-width:25ch">
                             <option>picsum.photos</option>
                             <option>imagecdn.app</option>
+                            <option>cataas.com (коты)</option>
+                            <option>dog.ceo (собаки)</option>
                         </select>
                         </div>
                         <div id="htContainerInputDiv">
@@ -3762,8 +3801,11 @@ function createInterface() {
                             <input id="hiddenContainerInput" type="file" multiple="true" />
                             <br><br>
                         </div>
+                        <div id="htContainerLinkDiv" style="padding-top:5px;">
+                            <input id="htContainerLinkInput" placeholder="Ссылка на картинку" autocomplete="off" style="max-width:50ch;width:100%" />
+                        </div>
                     </div>
-                    <div>
+                    <div style="padding-top:5px;">
                         <span style="margin-right: 5px">Имя картинки:</span>
                         <div class="selectbox">
                         <select id="htContainerNameSelect" class="input select" style="max-width:15ch">
@@ -3773,10 +3815,67 @@ function createInterface() {
                         </div>
                         <input id="htContainerName" autocomplete="off">
                     </div>
-                    <div>Подстраивать разрешение картинки под размер поста: <input id="isDataRatioLimited" type="checkbox"></div>
-                    <div id="maxDataRatioDiv" style="display:none">
-                    <div>Точное соответствие (картинка может быть уменьшена): <input id="isDownscaleAllowed" type="checkbox"></div>
-                    <div>Процент заполнения контейнера данными: <input type="number" id="maxDataRatio" min="1" max="100" value="20" style="width:70px"></div>
+                    <div style="padding-top:5px;">
+                        Подстраивать разрешение картинки под размер поста: <input id="htIsAdjustResolution" type="checkbox">
+                        <div id="htAdjustResolutionDiv" style="margin-left:18px;display:none">
+                        <div>Пороговый процент заполнения: <input type="number" id="htThresholdDataRatio" min="1" max="100"
+                            value="${!isNaN(parseInt(storage.thresholdDataRatio)) ? storage.thresholdDataRatio : 20}" style="width:50px"></div>
+                        <div>Максимальный процент заполнения: <input type="number" id="htMaxDataRatio" min="1" max="100"
+                            value="${!isNaN(parseInt(storage.maxDataRatio)) ? storage.maxDataRatio : 60}" style="width:50px"></div>
+                        <div>
+                            <div>
+                                <div>
+                                    <input type="radio" name="pixelCountAdjust" value="pixelcount" checked="checked">
+                                    <label>Ограничение по количеству пикселей</label>
+                                </div>
+                                <div id="htPixelCountAdjustDiv" style="margin-left:18px">
+                                    <div>Минимум: <input type="number" id="htMinPixelCount" min="1"
+                                        value="${!isNaN(parseInt(storage.minPixelCount)) ? storage.minPixelCount : 480000}" style="width:80px"> пикс. ± 
+                                        <input type="number" id="htMinPixelCountDeviance" min="0" max="99"
+                                        value="${!isNaN(parseInt(storage.minPixelCountDeviance)) ? storage.minPixelCountDeviance : 10}" style="width:50px"> %</div>
+                                    <div>Максимум: <input type="number" id="htMaxPixelCount" min="1"
+                                        value="${!isNaN(parseInt(storage.maxPixelCount)) ? storage.maxPixelCount : 6000000}" style="width:80px"> пикс. ± 
+                                        <input type="number" id="htMaxPixelCountDeviance" min="0" max="99"
+                                        value="${!isNaN(parseInt(storage.maxPixelCountDeviance)) ? storage.maxPixelCountDeviance : 10}" style="width:50px"> %</div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div>
+                                    <input type="radio" name="pixelCountAdjust" value="width">
+                                    <label>Ограничение по ширине</label>
+                                </div>
+                                <div id="htWidthAdjustDiv" style="margin-left:18px;display:none">
+                                    <div>Минимум: <input type="number" id="htMinWidth" min="1"
+                                        value="${!isNaN(parseInt(storage.minWidth)) ? storage.minWidth : 800}" style="width:80px"> пикс. ± 
+                                        <input type="number" id="htMinWidthDeviance" min="0" max="99"
+                                        value="${!isNaN(parseInt(storage.minWidthDeviance)) ? storage.minWidthDeviance : 10}" style="width:50px"> %</div>
+                                    <div>Максимум: <input type="number" id="htMaxWidth" min="1"
+                                        value="${!isNaN(parseInt(storage.maxWidth)) ? storage.maxWidth : 2000}" style="width:80px"> пикс. ± 
+                                        <input type="number" id="htMaxWidthDeviance" min="0" max="99"
+                                        value="${!isNaN(parseInt(storage.maxWidthDeviance)) ? storage.maxWidthDeviance : 10}" style="width:50px"> %</div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div>
+                                    <input type="radio" name="pixelCountAdjust" value="height">
+                                    <label>Ограничение по высоте</label>
+                                </div>
+                                <div id="htHeightAdjustDiv" style="margin-left:18px;display:none">
+                                    <div>Минимум: <input type="number" id="htMinHeight" min="1"
+                                        value="${!isNaN(parseInt(storage.minHeight)) ? storage.minHeight : 800}" style="width:80px"> пикс. ± 
+                                        <input type="number" id="htMinHeightDeviance" min="0" max="99"
+                                        value="${!isNaN(parseInt(storage.minHeightDeviance)) ? storage.minHeightDeviance : 10}" style="width:50px"> %</div>
+                                    <div>Максимум: <input type="number" id="htMaxHeight" min="1"
+                                        value="${!isNaN(parseInt(storage.maxHeight)) ? storage.maxHeight : 2000}" style="width:80px"> пикс. ± 
+                                        <input type="number" id="htMaxHeightDeviance" min="0" max="99"
+                                        value="${!isNaN(parseInt(storage.maxHeightDeviance)) ? storage.maxHeightDeviance : 10}" style="width:50px"> %
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        </div>
                     </div>
                 </div>
                 <br>
@@ -3892,10 +3991,28 @@ function createInterface() {
         clearCacheButton.disabled = false;
     }
 
-    // listeners
-    let enlargeCheck = document.getElementById('isDataRatioLimited')
-    enlargeCheck.onchange = function () {
-        document.getElementById('maxDataRatioDiv').style = `display:${enlargeCheck.checked ? 'block' : 'none'}`;
+    let adjustResolutionCheck = document.getElementById('htIsAdjustResolution');
+    adjustResolutionCheck.onchange = function () {
+        document.getElementById('htAdjustResolutionDiv').style.display = adjustResolutionCheck.checked ? 'block' : 'none';
+    }
+
+    let pixelCountAdjustRadio = document.querySelectorAll('input[name="pixelCountAdjust"]');
+    for (let i = 0; i < pixelCountAdjustRadio.length; i++) {
+        pixelCountAdjustRadio[i].addEventListener('change', function() {
+            if (this.value == 'pixelcount') {
+                document.getElementById('htPixelCountAdjustDiv').style.display = 'block';
+                document.getElementById('htWidthAdjustDiv').style.display = 'none';
+                document.getElementById('htHeightAdjustDiv').style.display = 'none';
+            } else if (this.value == 'width') {
+                document.getElementById('htPixelCountAdjustDiv').style.display = 'none';
+                document.getElementById('htWidthAdjustDiv').style.display = 'block';
+                document.getElementById('htHeightAdjustDiv').style.display = 'none';
+            } else if (this.value == 'height') {
+                document.getElementById('htPixelCountAdjustDiv').style.display = 'none';
+                document.getElementById('htWidthAdjustDiv').style.display = 'none';
+                document.getElementById('htHeightAdjustDiv').style.display = 'block';
+            }
+        });
     }
 
     let hideEl = document.getElementById('hideNormalPosts');
@@ -3915,7 +4032,7 @@ function createInterface() {
             : ""
     }
 
-    document.getElementById('htContainerNameSelect').onclick = function () {
+    document.getElementById('htContainerNameSelect').onchange = function () {
         document.getElementById('htContainerName').value = '';
         if (this.selectedIndex == 0) {
             document.getElementById('htContainerName').placeholder = 'image.png';
@@ -3926,19 +4043,30 @@ function createInterface() {
         setStorage({ containerName: this.selectedIndex });
     }
     document.getElementById('htContainerNameSelect').selectedIndex = storage.containerName ? storage.containerName : 0;
-    document.getElementById('htContainerNameSelect').click();
+    document.getElementById('htContainerNameSelect').dispatchEvent(new Event('change'));
 
-    document.getElementById('htContainerTypeSelect').onclick = function () {
+    document.getElementById('htContainerTypeSelect').onchange = function () {
         document.getElementById('htContainerPackSelectDiv').style.display = (this.selectedIndex == 0) ?
             'inline-block' : 'none';
-        document.getElementById('htContainerInputDiv').style.display = (this.selectedIndex == 1) ?
+        document.getElementById('htContainerLinkDiv').style.display = (this.selectedIndex == 1) ?
             'block' : 'none';
+        document.getElementById('htContainerInputDiv').style.display = (this.selectedIndex == 2) ?
+            'block' : 'none';
+
+        // Для случайных и сгенерированных нет оригинального разрешения
+        if (this.selectedIndex == 0 || this.selectedIndex == 3) {
+            document.getElementById('htIsAdjustResolution').checked = true;
+            document.getElementById('htIsAdjustResolution').disabled = true;
+            document.getElementById('htAdjustResolutionDiv').style.display = 'block';
+        } else {
+            document.getElementById('htIsAdjustResolution').disabled = false;
+        }
         setStorage({ containerType: this.selectedIndex });
     }
     document.getElementById('htContainerTypeSelect').selectedIndex = storage.containerType ? storage.containerType : 0;
-    document.getElementById('htContainerTypeSelect').click();
+    document.getElementById('htContainerTypeSelect').dispatchEvent(new Event('change'));
 
-    document.getElementById('htContainerPackSelect').onclick = function () {
+    document.getElementById('htContainerPackSelect').onchange = function () {
         setStorage({ containerPack: this.selectedIndex });
     }
     document.getElementById('htContainerPackSelect').selectedIndex = storage.containerPack ? storage.containerPack : 0;
@@ -3976,7 +4104,7 @@ function createInterface() {
                     document.getElementById('hiddenFilesInput').value = null;
                 }
                 // Сбрасываем название картинки, чтобы оно не повторялось
-                document.getElementById('htContainerNameSelect').click();
+                document.getElementById('htContainerNameSelect').dispatchEvent(new Event('change'));
             }
         } catch (e) {
             Utils.trace('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
@@ -3989,7 +4117,7 @@ function createInterface() {
 
     // Обработчики элементов в настройках шифрования
     document.getElementById('htPasswordSelect').prevIndex = -1;
-    document.getElementById('htPasswordSelect').onclick = function (e) {
+    document.getElementById('htPasswordSelect').onchange = function (e) {
         if (this.selectedIndex == this.prevIndex) return;
         if (this.selectedIndex == 0) {
             document.getElementById('htPasswordInputDiv').style.display = 'none';
@@ -4008,7 +4136,7 @@ function createInterface() {
         this.prevIndex = this.selectedIndex;
     }
     document.getElementById('htPrivateKeySelect').prevIndex = -1;
-    document.getElementById('htPrivateKeySelect').onclick = function (e) {
+    document.getElementById('htPrivateKeySelect').onchange = function (e) {
         if (this.selectedIndex == this.prevIndex) return;
         if (this.selectedIndex == 0) {
             document.getElementById('htPrivateKeyInputDiv').style.display = 'none';
@@ -4036,7 +4164,7 @@ function createInterface() {
         }
         this.prevIndex = this.selectedIndex;
     }
-    document.getElementById('htOtherPublicKeySelect').onclick = function (e) {
+    document.getElementById('htOtherPublicKeySelect').onchange = function (e) {
         if (this.selectedIndex == this.prevIndex) return;
         if (this.selectedIndex == 0) {
             document.getElementById('htOtherPublicKeyInputDiv').style.display = 'none';
@@ -4390,18 +4518,74 @@ const MESSAGE_MAX_LENGTH = 30000
 const MAX_FILES_COUNT = 9;
 const MAX_FILENAME_LENGTH = 20;
 
+function calcContainerSize(container, ratio, dataLength, pixelCount) {
+    let newPixelCount = dataLength / container.thresholdDataRatio / 3;
+    let newWidth = Math.sqrt(newPixelCount * ratio);
+    let newHeight = newWidth / ratio;
+
+    let minValue = null;
+    let minValueDeviance = null;
+    let maxValue = null;
+    let maxValueDeviance = null;
+    if (container.pixelCountAdjust == 'pixelcount') {
+        minValue = container.minPixelCount;
+        minValueDeviance = container.minPixelCountDeviance;
+        maxValue = container.maxPixelCount;
+        maxValueDeviance = container.maxPixelCountDeviance;
+    } else if (container.pixelCountAdjust == 'width') {
+        minValue = container.minWidth;
+        minValueDeviance = container.minWidthDeviance;
+        maxValue = container.maxWidth;
+        maxValueDeviance = container.maxWidthDeviance;
+    } else if (container.pixelCountAdjust == 'height') {
+        minValue = container.minHeight;
+        minValueDeviance = container.minHeightDeviance;
+        maxValue = container.maxHeight;
+        maxValueDeviance = container.maxHeightDeviance;
+    }
+    const minValueDeviancePix = minValue * minValueDeviance;
+    const maxValueDeviancePix = maxValue * maxValueDeviance;
+    minValue = Utils.getRandomInRange(minValue - minValueDeviancePix, minValue + minValueDeviancePix);
+    maxValue = Utils.getRandomInRange(maxValue - maxValueDeviancePix, maxValue + maxValueDeviancePix);
+
+    if (container.pixelCountAdjust == 'pixelcount') {
+        newPixelCount = Math.min(Math.max(newPixelCount, minValue), maxValue);
+        newWidth = Math.sqrt(newPixelCount * ratio);
+        newHeight = newWidth / ratio;
+    } else if (container.pixelCountAdjust == 'width') {
+        newWidth = Math.min(Math.max(newWidth, minValue), maxValue);
+        newHeight = newWidth / ratio;
+        newPixelCount = newWidth * newHeight;
+    } else if (container.pixelCountAdjust == 'height') {
+        newHeight = Math.min(Math.max(newHeight, minValue), maxValue);
+        newWidth = newHeight * ratio;
+        newPixelCount = newWidth * newHeight;
+    }
+
+    let newFillRatio = dataLength / (newPixelCount * 3);
+    if (newFillRatio > container.maxDataRatio)
+        return null;
+
+    return {
+        scale: Math.sqrt(newPixelCount / pixelCount),
+        width: Math.ceil(newWidth),
+        height: Math.ceil(newHeight),
+    };
+}
+
 async function hideDataToImage(container, data) {
     let imageBitmap = await createImageBitmap(container.image);
-    let rgbCount = imageBitmap.width * imageBitmap.height * 3;
+    let pixelCount = imageBitmap.width * imageBitmap.height;
+    let rgbCount = pixelCount * 3;
+    let ratio = imageBitmap.width / imageBitmap.height;
 
     let scale = 1;
-    if (container.maxDataRatio != 0) {
-        // Масштабируем изображение так, чтобы отношение данные/картинка
-        // было равно maxDataRatio
-        let ratio = data.length / rgbCount;
-        if (container.isDownscaleAllowed || ratio > container.maxDataRatio) {
-            scale = Math.sqrt(ratio / container.maxDataRatio);
-        }
+    if (container.isAdjustResolution) {
+        let containerSize = calcContainerSize(container, ratio, data.length, pixelCount);
+        if (!containerSize)
+            throw new Error('Невозможно вместить данные в контейнер, необходимо увеличить '+
+                'максимальный процент заполнения или выбрать большее разрешение.');
+        scale = containerSize.scale;
     }
     else if (rgbCount < data.length) {
         let rest = Math.ceil((data.length - rgbCount) / 3);
@@ -4526,37 +4710,50 @@ async function encryptPost(message, files, password, privateKey, otherPublicKey)
     return encryptedData;
 }
 
-async function getRandomContainer(dataLength, pack) {
-    const MIN_WIDTH = Utils.getRandomInRange(800-50, 800+50);
-    const MAX_WIDTH = Utils.getRandomInRange(3000-200, 3000+200);
+async function getContainer(url) {
+    let image = new Image();
+    image.crossOrigin = "anonymous";
+    try {
+        image.src = url;
+        await image.decode();
+    } catch (e) {
+        Utils.trace(`HiddenThread: ошибка при загрузке контейнера по ссылке "${image.src}": ${e}`);
+        throw new Error('Не удалось загрузить контейнер по ссылке. Попробуйте ещё раз или выберите другую картинку.');
+    }
+    return image;
+}
+
+async function getRandomContainer(container, dataLength) {
     const RATIO = Utils.getRandomInRange(1.2, 2.0, true);
-    const MIN_FILL_RATIO = 0.2;
-    const MAX_FILL_RATIO = 0.6;
 
-    let pixelCount = dataLength / MIN_FILL_RATIO / 3;
-    let width = Math.floor(Math.sqrt(pixelCount * RATIO));
-    if (width < MIN_WIDTH) {
-        width = MIN_WIDTH;
-    }
-    if (width > MAX_WIDTH) {
-        width = MAX_WIDTH;
-        // проверяем, что данные поместятся в картинку с макс. разрешением
-        let rgbCount = width * (width/RATIO) * 3;
-        let newFillRatio = dataLength / rgbCount;
-        if (newFillRatio > MAX_FILL_RATIO)
-            throw new Error('Невозможно вместить данные в случайный контейнер. Выбери свою картинку с большим разрешением.');
-    }
+    let containerSize = calcContainerSize(container, RATIO, dataLength, 1);
+    if (!containerSize)
+        throw new Error('Невозможно вместить данные в контейнер, необходимо увеличить '+
+            'максимальный процент заполнения или выбрать большее разрешение.');
 
-    let height = Math.floor(width / RATIO);
+    let width = containerSize.width;
+    let height = containerSize.height;
 
     let image = new Image();
     image.crossOrigin = "anonymous";
     try {
         // ?x=... нужно для отключения кэша
-        if (pack == 0) {
-            image.src = `https://picsum.photos/${width}/${height}?x=${Date.now()}`;
-        } else {
-            image.src = `https://random.imagecdn.app/${width}/${height}?x=${Date.now()}`;
+        let nocache = `x=${Date.now()}`;
+        if (container.pack == 0) {
+            image.src = `https://picsum.photos/${width}/${height}?${nocache}`;
+        } else if (container.pack == 1) {
+            image.src = `https://random.imagecdn.app/${width}/${height}?${nocache}`;
+        } else if (container.pack == 2) {
+            image.src = `https://cataas.com/cat?width=${width}&${nocache}`;
+        } else if (container.pack == 3) {
+            let jsonUrl = `https://dog.ceo/api/breeds/image/random?${nocache}`;
+            let response = await fetch(jsonUrl);
+            if (!response.ok)
+                throw new Error(`fetch not ok, url: ${jsonUrl}`);
+            let obj = await response.json();
+            if (!obj.status || obj.status !== 'success' || !obj.message)
+                throw new Error(`wrong object: ${JSON.stringify(obj)}`);
+            image.src = obj.message;
         }
         await image.decode();
     } catch (e) {
@@ -4569,7 +4766,13 @@ async function getRandomContainer(dataLength, pack) {
 async function createHiddenPostImpl(container, message, files, password, privateKey, otherPublicKey) {
     let encryptedData = await encryptPost(message, files, password, privateKey, otherPublicKey);
     if (!container.image) {
-        container.image = await getRandomContainer(encryptedData.length, container.pack);
+        if (typeof(container.pack) == 'number') {
+            container.image = await getRandomContainer(container, encryptedData.length);
+        } else if (container.url) {
+            container.image = await getContainer(container.url);
+        } else {
+            throw new Error('Введите ссылку для загрузки контейнера!');
+        }
     }
     let imageResult = await hideDataToImage(container, encryptedData);
 
@@ -4866,7 +5069,7 @@ function createImagePreview(blobLink) {
     let imagePreview = document.createElement('img');
     imagePreview.src = blobLink;
     imagePreviewLink.appendChild(imagePreview);
-    imagePreview.style = 'max-width: 200px;';
+    imagePreview.style = 'max-width:200px;max-height:300px;';
     imagePreviewLink.href = blobLink;
     imagePreviewLink.target = "_blank";
 
@@ -5062,7 +5265,7 @@ function getShuffledIndexList(length, steps) {
     return arrayIndexList;
 }
 
-function runWorker(func, _args, handler)
+function runWorker(func, _args, onsuccess, onerror)
 {
     const runOnce = true;
 
@@ -5083,12 +5286,13 @@ function runWorker(func, _args, handler)
     let worker = new Worker(funcString);
 
     worker.onmessage = function(e) {
-        handler(e.data);
+        onsuccess(e.data);
         if (runOnce)
             worker.terminate();
     }
     worker.onerror = function(e) {
-        handler(e);
+        e.preventDefault();
+        onerror(e.message);
     }
     worker.postMessage({
         type: '__args',
@@ -5161,6 +5365,9 @@ async function hideDataToArray(array, data) {
             function(newArray) {
                 resolve(newArray);
             },
+            function(e) {
+                reject(e);
+            },
         );
     });
 }
@@ -5172,6 +5379,9 @@ async function extractDataFromArray(array, dataLength) {
             [array, dataLength],
             function(data) {
                 resolve(data);
+            },
+            function(e) {
+                reject(e);
             },
         );
     });
