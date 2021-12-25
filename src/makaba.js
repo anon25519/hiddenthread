@@ -88,11 +88,20 @@ async function createHiddenPost() {
     let imageContainerDiv = document.getElementById('imageContainerDiv');
     imageContainerDiv.innerHTML = '';
 
-    let maxDataRatio = 0;
-    let isDownscaleAllowed = document.getElementById('isDownscaleAllowed').checked;
-    if (document.getElementById('isDataRatioLimited').checked) {
-        maxDataRatio = Math.min(Math.max(parseInt(document.getElementById('maxDataRatio').value), 1), 100) / 100;
-    }
+    setStorage({ thresholdDataRatio: document.getElementById('htThresholdDataRatio').value });
+    setStorage({ maxDataRatio: document.getElementById('htMaxDataRatio').value });
+    setStorage({ minPixelCount: document.getElementById('htMinPixelCount').value });
+    setStorage({ minPixelCountDeviance: document.getElementById('htMinPixelCountDeviance').value });
+    setStorage({ maxPixelCount: document.getElementById('htMaxPixelCount').value });
+    setStorage({ maxPixelCountDeviance: document.getElementById('htMaxPixelCountDeviance').value });
+    setStorage({ minWidth: document.getElementById('htMinWidth').value });
+    setStorage({ minWidthDeviance: document.getElementById('htMinWidthDeviance').value });
+    setStorage({ maxWidth: document.getElementById('htMaxWidth').value });
+    setStorage({ maxWidthDeviance: document.getElementById('htMaxWidthDeviance').value });
+    setStorage({ minHeight: document.getElementById('htMinHeight').value });
+    setStorage({ minHeightDeviance: document.getElementById('htMinHeightDeviance').value });
+    setStorage({ maxHeight: document.getElementById('htMaxHeight').value });
+    setStorage({ maxHeightDeviance: document.getElementById('htMaxHeightDeviance').value });
 
     let container = null;
     let pack = null;
@@ -109,17 +118,29 @@ async function createHiddenPost() {
     } else if (containerType == 3) {
         // Для генерации создаем пустую картинку 1x1
         container = new ImageData(new Uint8ClampedArray(4), 1, 1);
-        // Если не выбран процент заполнения, заполняем всё
-        if (maxDataRatio == 0) maxDataRatio = 1;
     }
 
     let imageResult = await Post.createHiddenPostImpl(
         {
-            'image': container,
-            'maxDataRatio': maxDataRatio,
-            'isDownscaleAllowed': isDownscaleAllowed,
-            'pack': pack,
-            'url': url
+            image: container,
+            pack: pack,
+            url: url,
+            isAdjustResolution: document.getElementById('htIsAdjustResolution').checked,
+            thresholdDataRatio: parseInt(document.getElementById('htThresholdDataRatio').value) / 100,
+            maxDataRatio: parseInt(document.getElementById('htMaxDataRatio').value) / 100,
+            pixelCountAdjust: document.querySelector('input[name="pixelCountAdjust"]:checked').value,
+            minPixelCount: parseInt(document.getElementById('htMinPixelCount').value),
+            minPixelCountDeviance: parseInt(document.getElementById('htMinPixelCountDeviance').value) / 100,
+            maxPixelCount: parseInt(document.getElementById('htMaxPixelCount').value),
+            maxPixelCountDeviance: parseInt(document.getElementById('htMaxPixelCountDeviance').value) / 100,
+            minWidth: parseInt(document.getElementById('htMinWidth').value),
+            minWidthDeviance: parseInt(document.getElementById('htMinWidthDeviance').value) / 100,
+            maxWidth: parseInt(document.getElementById('htMaxWidth').value),
+            maxWidthDeviance: parseInt(document.getElementById('htMaxWidthDeviance').value) / 100,
+            minHeight: parseInt(document.getElementById('htMinHeight').value),
+            minHeightDeviance: parseInt(document.getElementById('htMinHeightDeviance').value) / 100,
+            maxHeight: parseInt(document.getElementById('htMaxHeight').value),
+            maxHeightDeviance: parseInt(document.getElementById('htMaxHeightDeviance').value) / 100,
         },
         document.getElementById('hiddenPostInput').value,
         document.getElementById('hiddenFilesInput').files,
@@ -137,7 +158,7 @@ async function createHiddenPost() {
 
     // Вставляем картинку в форму для отображения пользователю
     let img = document.createElement('img');
-    img.style = "max-width: 300px;";
+    img.style = "max-width: 300px; max-height: 300px;";
     let imgUrl = URL.createObjectURL(blob);
     
     img.src = imgUrl;
@@ -895,10 +916,67 @@ function createInterface() {
                         </div>
                         <input id="htContainerName" autocomplete="off">
                     </div>
-                    <div>Подстраивать разрешение картинки под размер поста: <input id="isDataRatioLimited" type="checkbox"></div>
-                    <div id="maxDataRatioDiv" style="display:none">
-                    <div>Точное соответствие (картинка может быть уменьшена): <input id="isDownscaleAllowed" type="checkbox"></div>
-                    <div>Процент заполнения контейнера данными: <input type="number" id="maxDataRatio" min="1" max="100" value="20" style="width:70px"></div>
+                    <div style="padding-top:5px;">
+                        Подстраивать разрешение картинки под размер поста: <input id="htIsAdjustResolution" type="checkbox">
+                        <div id="htAdjustResolutionDiv" style="margin-left:18px;display:none">
+                        <div>Пороговый процент заполнения: <input type="number" id="htThresholdDataRatio" min="1" max="100"
+                            value="${!isNaN(parseInt(storage.thresholdDataRatio)) ? storage.thresholdDataRatio : 20}" style="width:50px"></div>
+                        <div>Максимальный процент заполнения: <input type="number" id="htMaxDataRatio" min="1" max="100"
+                            value="${!isNaN(parseInt(storage.maxDataRatio)) ? storage.maxDataRatio : 60}" style="width:50px"></div>
+                        <div>
+                            <div>
+                                <div>
+                                    <input type="radio" name="pixelCountAdjust" value="pixelcount" checked="checked">
+                                    <label>Ограничение по количеству пикселей</label>
+                                </div>
+                                <div id="htPixelCountAdjustDiv" style="margin-left:18px">
+                                    <div>Минимум: <input type="number" id="htMinPixelCount" min="1"
+                                        value="${!isNaN(parseInt(storage.minPixelCount)) ? storage.minPixelCount : 480000}" style="width:80px"> пикс. ± 
+                                        <input type="number" id="htMinPixelCountDeviance" min="0" max="99"
+                                        value="${!isNaN(parseInt(storage.minPixelCountDeviance)) ? storage.minPixelCountDeviance : 10}" style="width:50px"> %</div>
+                                    <div>Максимум: <input type="number" id="htMaxPixelCount" min="1"
+                                        value="${!isNaN(parseInt(storage.maxPixelCount)) ? storage.maxPixelCount : 6000000}" style="width:80px"> пикс. ± 
+                                        <input type="number" id="htMaxPixelCountDeviance" min="0" max="99"
+                                        value="${!isNaN(parseInt(storage.maxPixelCountDeviance)) ? storage.maxPixelCountDeviance : 10}" style="width:50px"> %</div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div>
+                                    <input type="radio" name="pixelCountAdjust" value="width">
+                                    <label>Ограничение по ширине</label>
+                                </div>
+                                <div id="htWidthAdjustDiv" style="margin-left:18px;display:none">
+                                    <div>Минимум: <input type="number" id="htMinWidth" min="1"
+                                        value="${!isNaN(parseInt(storage.minWidth)) ? storage.minWidth : 800}" style="width:80px"> пикс. ± 
+                                        <input type="number" id="htMinWidthDeviance" min="0" max="99"
+                                        value="${!isNaN(parseInt(storage.minWidthDeviance)) ? storage.minWidthDeviance : 10}" style="width:50px"> %</div>
+                                    <div>Максимум: <input type="number" id="htMaxWidth" min="1"
+                                        value="${!isNaN(parseInt(storage.maxWidth)) ? storage.maxWidth : 2000}" style="width:80px"> пикс. ± 
+                                        <input type="number" id="htMaxWidthDeviance" min="0" max="99"
+                                        value="${!isNaN(parseInt(storage.maxWidthDeviance)) ? storage.maxWidthDeviance : 10}" style="width:50px"> %</div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div>
+                                    <input type="radio" name="pixelCountAdjust" value="height">
+                                    <label>Ограничение по высоте</label>
+                                </div>
+                                <div id="htHeightAdjustDiv" style="margin-left:18px;display:none">
+                                    <div>Минимум: <input type="number" id="htMinHeight" min="1"
+                                        value="${!isNaN(parseInt(storage.minHeight)) ? storage.minHeight : 800}" style="width:80px"> пикс. ± 
+                                        <input type="number" id="htMinHeightDeviance" min="0" max="99"
+                                        value="${!isNaN(parseInt(storage.minHeightDeviance)) ? storage.minHeightDeviance : 10}" style="width:50px"> %</div>
+                                    <div>Максимум: <input type="number" id="htMaxHeight" min="1"
+                                        value="${!isNaN(parseInt(storage.maxHeight)) ? storage.maxHeight : 2000}" style="width:80px"> пикс. ± 
+                                        <input type="number" id="htMaxHeightDeviance" min="0" max="99"
+                                        value="${!isNaN(parseInt(storage.maxHeightDeviance)) ? storage.maxHeightDeviance : 10}" style="width:50px"> %
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        </div>
                     </div>
                 </div>
                 <br>
@@ -1014,10 +1092,28 @@ function createInterface() {
         clearCacheButton.disabled = false;
     }
 
-    // listeners
-    let enlargeCheck = document.getElementById('isDataRatioLimited')
-    enlargeCheck.onchange = function () {
-        document.getElementById('maxDataRatioDiv').style = `display:${enlargeCheck.checked ? 'block' : 'none'}`;
+    let adjustResolutionCheck = document.getElementById('htIsAdjustResolution');
+    adjustResolutionCheck.onchange = function () {
+        document.getElementById('htAdjustResolutionDiv').style.display = adjustResolutionCheck.checked ? 'block' : 'none';
+    }
+
+    let pixelCountAdjustRadio = document.querySelectorAll('input[name="pixelCountAdjust"]');
+    for (let i = 0; i < pixelCountAdjustRadio.length; i++) {
+        pixelCountAdjustRadio[i].addEventListener('change', function() {
+            if (this.value == 'pixelcount') {
+                document.getElementById('htPixelCountAdjustDiv').style.display = 'block';
+                document.getElementById('htWidthAdjustDiv').style.display = 'none';
+                document.getElementById('htHeightAdjustDiv').style.display = 'none';
+            } else if (this.value == 'width') {
+                document.getElementById('htPixelCountAdjustDiv').style.display = 'none';
+                document.getElementById('htWidthAdjustDiv').style.display = 'block';
+                document.getElementById('htHeightAdjustDiv').style.display = 'none';
+            } else if (this.value == 'height') {
+                document.getElementById('htPixelCountAdjustDiv').style.display = 'none';
+                document.getElementById('htWidthAdjustDiv').style.display = 'none';
+                document.getElementById('htHeightAdjustDiv').style.display = 'block';
+            }
+        });
     }
 
     let hideEl = document.getElementById('hideNormalPosts');
@@ -1057,6 +1153,15 @@ function createInterface() {
             'block' : 'none';
         document.getElementById('htContainerInputDiv').style.display = (this.selectedIndex == 2) ?
             'block' : 'none';
+
+        // Для случайных и сгенерированных нет оригинального разрешения
+        if (this.selectedIndex == 0 || this.selectedIndex == 3) {
+            document.getElementById('htIsAdjustResolution').checked = true;
+            document.getElementById('htIsAdjustResolution').disabled = true;
+            document.getElementById('htAdjustResolutionDiv').style.display = 'block';
+        } else {
+            document.getElementById('htIsAdjustResolution').disabled = false;
+        }
         setStorage({ containerType: this.selectedIndex });
     }
     document.getElementById('htContainerTypeSelect').selectedIndex = storage.containerType ? storage.containerType : 0;

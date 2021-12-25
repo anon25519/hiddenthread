@@ -10,18 +10,74 @@ const MESSAGE_MAX_LENGTH = 30000
 const MAX_FILES_COUNT = 9;
 const MAX_FILENAME_LENGTH = 20;
 
+function calcContainerSize(container, ratio, dataLength, pixelCount) {
+    let newPixelCount = dataLength / container.thresholdDataRatio / 3;
+    let newWidth = Math.sqrt(newPixelCount * ratio);
+    let newHeight = newWidth / ratio;
+
+    let minValue = null;
+    let minValueDeviance = null;
+    let maxValue = null;
+    let maxValueDeviance = null;
+    if (container.pixelCountAdjust == 'pixelcount') {
+        minValue = container.minPixelCount;
+        minValueDeviance = container.minPixelCountDeviance;
+        maxValue = container.maxPixelCount;
+        maxValueDeviance = container.maxPixelCountDeviance;
+    } else if (container.pixelCountAdjust == 'width') {
+        minValue = container.minWidth;
+        minValueDeviance = container.minWidthDeviance;
+        maxValue = container.maxWidth;
+        maxValueDeviance = container.maxWidthDeviance;
+    } else if (container.pixelCountAdjust == 'height') {
+        minValue = container.minHeight;
+        minValueDeviance = container.minHeightDeviance;
+        maxValue = container.maxHeight;
+        maxValueDeviance = container.maxHeightDeviance;
+    }
+    const minValueDeviancePix = minValue * minValueDeviance;
+    const maxValueDeviancePix = maxValue * maxValueDeviance;
+    minValue = Utils.getRandomInRange(minValue - minValueDeviancePix, minValue + minValueDeviancePix);
+    maxValue = Utils.getRandomInRange(maxValue - maxValueDeviancePix, maxValue + maxValueDeviancePix);
+
+    if (container.pixelCountAdjust == 'pixelcount') {
+        newPixelCount = Math.min(Math.max(newPixelCount, minValue), maxValue);
+        newWidth = Math.sqrt(newPixelCount * ratio);
+        newHeight = newWidth / ratio;
+    } else if (container.pixelCountAdjust == 'width') {
+        newWidth = Math.min(Math.max(newWidth, minValue), maxValue);
+        newHeight = newWidth / ratio;
+        newPixelCount = newWidth * newHeight;
+    } else if (container.pixelCountAdjust == 'height') {
+        newHeight = Math.min(Math.max(newHeight, minValue), maxValue);
+        newWidth = newHeight * ratio;
+        newPixelCount = newWidth * newHeight;
+    }
+
+    let newFillRatio = dataLength / (newPixelCount * 3);
+    if (newFillRatio > container.maxDataRatio)
+        return null;
+
+    return {
+        scale: Math.sqrt(newPixelCount / pixelCount),
+        width: Math.ceil(newWidth),
+        height: Math.ceil(newHeight),
+    };
+}
+
 async function hideDataToImage(container, data) {
     let imageBitmap = await createImageBitmap(container.image);
-    let rgbCount = imageBitmap.width * imageBitmap.height * 3;
+    let pixelCount = imageBitmap.width * imageBitmap.height;
+    let rgbCount = pixelCount * 3;
+    let ratio = imageBitmap.width / imageBitmap.height;
 
     let scale = 1;
-    if (container.maxDataRatio != 0) {
-        // Масштабируем изображение так, чтобы отношение данные/картинка
-        // было равно maxDataRatio
-        let ratio = data.length / rgbCount;
-        if (container.isDownscaleAllowed || ratio > container.maxDataRatio) {
-            scale = Math.sqrt(ratio / container.maxDataRatio);
-        }
+    if (container.isAdjustResolution) {
+        let containerSize = calcContainerSize(container, ratio, data.length, pixelCount);
+        if (!containerSize)
+            throw new Error('Невозможно вместить данные в контейнер, необходимо увеличить '+
+                'максимальный процент заполнения или выбрать большее разрешение.');
+        scale = containerSize.scale;
     }
     else if (rgbCount < data.length) {
         let rest = Math.ceil((data.length - rgbCount) / 3);
@@ -159,42 +215,30 @@ async function getContainer(url) {
     return image;
 }
 
-async function getRandomContainer(dataLength, pack) {
-    const MIN_WIDTH = Utils.getRandomInRange(800-50, 800+50);
-    const MAX_WIDTH = Utils.getRandomInRange(3000-200, 3000+200);
+async function getRandomContainer(container, dataLength) {
     const RATIO = Utils.getRandomInRange(1.2, 2.0, true);
-    const MIN_FILL_RATIO = 0.2;
-    const MAX_FILL_RATIO = 0.6;
 
-    let pixelCount = dataLength / MIN_FILL_RATIO / 3;
-    let width = Math.floor(Math.sqrt(pixelCount * RATIO));
-    if (width < MIN_WIDTH) {
-        width = MIN_WIDTH;
-    }
-    if (width > MAX_WIDTH) {
-        width = MAX_WIDTH;
-        // проверяем, что данные поместятся в картинку с макс. разрешением
-        let rgbCount = width * (width/RATIO) * 3;
-        let newFillRatio = dataLength / rgbCount;
-        if (newFillRatio > MAX_FILL_RATIO)
-            throw new Error('Невозможно вместить данные в случайный контейнер. Выбери свою картинку с большим разрешением.');
-    }
+    let containerSize = calcContainerSize(container, RATIO, dataLength, 1);
+    if (!containerSize)
+        throw new Error('Невозможно вместить данные в контейнер, необходимо увеличить '+
+            'максимальный процент заполнения или выбрать большее разрешение.');
 
-    let height = Math.floor(width / RATIO);
+    let width = containerSize.width;
+    let height = containerSize.height;
 
     let image = new Image();
     image.crossOrigin = "anonymous";
     try {
         // ?x=... нужно для отключения кэша
-        let nocache = `?x=${Date.now()}`;
-        if (pack == 0) {
-            image.src = `https://picsum.photos/${width}/${height}${nocache}`;
-        } else if (pack == 1) {
-            image.src = `https://random.imagecdn.app/${width}/${height}${nocache}`;
-        } else if (pack == 2) {
-            image.src = `https://cataas.com/cat?width=${width}${nocache}`;
-        } else if (pack == 3) {
-            let jsonUrl = `https://dog.ceo/api/breeds/image/random${nocache}`;
+        let nocache = `x=${Date.now()}`;
+        if (container.pack == 0) {
+            image.src = `https://picsum.photos/${width}/${height}?${nocache}`;
+        } else if (container.pack == 1) {
+            image.src = `https://random.imagecdn.app/${width}/${height}?${nocache}`;
+        } else if (container.pack == 2) {
+            image.src = `https://cataas.com/cat?width=${width}&${nocache}`;
+        } else if (container.pack == 3) {
+            let jsonUrl = `https://dog.ceo/api/breeds/image/random?${nocache}`;
             let response = await fetch(jsonUrl);
             if (!response.ok)
                 throw new Error(`fetch not ok, url: ${jsonUrl}`);
@@ -215,7 +259,7 @@ async function createHiddenPostImpl(container, message, files, password, private
     let encryptedData = await encryptPost(message, files, password, privateKey, otherPublicKey);
     if (!container.image) {
         if (typeof(container.pack) == 'number') {
-            container.image = await getRandomContainer(encryptedData.length, container.pack);
+            container.image = await getRandomContainer(container, encryptedData.length);
         } else if (container.url) {
             container.image = await getContainer(container.url);
         } else {
@@ -517,7 +561,7 @@ function createImagePreview(blobLink) {
     let imagePreview = document.createElement('img');
     imagePreview.src = blobLink;
     imagePreviewLink.appendChild(imagePreview);
-    imagePreview.style = 'max-width: 200px;';
+    imagePreview.style = 'max-width:200px;max-height:300px;';
     imagePreviewLink.href = blobLink;
     imagePreviewLink.target = "_blank";
 

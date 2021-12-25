@@ -20,7 +20,7 @@ function getShuffledIndexList(length, steps) {
     return arrayIndexList;
 }
 
-function runWorker(func, _args, handler)
+function runWorker(func, _args, onsuccess, onerror)
 {
     const runOnce = true;
 
@@ -41,12 +41,13 @@ function runWorker(func, _args, handler)
     let worker = new Worker(funcString);
 
     worker.onmessage = function(e) {
-        handler(e.data);
+        onsuccess(e.data);
         if (runOnce)
             worker.terminate();
     }
     worker.onerror = function(e) {
-        handler(e);
+        e.preventDefault();
+        onerror(e.message);
     }
     worker.postMessage({
         type: '__args',
@@ -119,6 +120,9 @@ async function hideDataToArray(array, data) {
             function(newArray) {
                 resolve(newArray);
             },
+            function(e) {
+                reject(e);
+            },
         );
     });
 }
@@ -130,6 +134,9 @@ async function extractDataFromArray(array, dataLength) {
             [array, dataLength],
             function(data) {
                 resolve(data);
+            },
+            function(e) {
+                reject(e);
             },
         );
     });
