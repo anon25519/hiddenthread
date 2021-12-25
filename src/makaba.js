@@ -1133,7 +1133,7 @@ function createInterface() {
             : ""
     }
 
-    document.getElementById('htContainerNameSelect').onclick = function () {
+    document.getElementById('htContainerNameSelect').onchange = function () {
         document.getElementById('htContainerName').value = '';
         if (this.selectedIndex == 0) {
             document.getElementById('htContainerName').placeholder = 'image.png';
@@ -1146,7 +1146,7 @@ function createInterface() {
     document.getElementById('htContainerNameSelect').selectedIndex = storage.containerName ? storage.containerName : 0;
     document.getElementById('htContainerNameSelect').click();
 
-    document.getElementById('htContainerTypeSelect').onclick = function () {
+    document.getElementById('htContainerTypeSelect').onchange = function () {
         document.getElementById('htContainerPackSelectDiv').style.display = (this.selectedIndex == 0) ?
             'inline-block' : 'none';
         document.getElementById('htContainerLinkDiv').style.display = (this.selectedIndex == 1) ?
@@ -1167,7 +1167,7 @@ function createInterface() {
     document.getElementById('htContainerTypeSelect').selectedIndex = storage.containerType ? storage.containerType : 0;
     document.getElementById('htContainerTypeSelect').click();
 
-    document.getElementById('htContainerPackSelect').onclick = function () {
+    document.getElementById('htContainerPackSelect').onchange = function () {
         setStorage({ containerPack: this.selectedIndex });
     }
     document.getElementById('htContainerPackSelect').selectedIndex = storage.containerPack ? storage.containerPack : 0;
@@ -1218,7 +1218,7 @@ function createInterface() {
 
     // Обработчики элементов в настройках шифрования
     document.getElementById('htPasswordSelect').prevIndex = -1;
-    document.getElementById('htPasswordSelect').onclick = function (e) {
+    document.getElementById('htPasswordSelect').onchange = function (e) {
         if (this.selectedIndex == this.prevIndex) return;
         if (this.selectedIndex == 0) {
             document.getElementById('htPasswordInputDiv').style.display = 'none';
@@ -1237,7 +1237,7 @@ function createInterface() {
         this.prevIndex = this.selectedIndex;
     }
     document.getElementById('htPrivateKeySelect').prevIndex = -1;
-    document.getElementById('htPrivateKeySelect').onclick = function (e) {
+    document.getElementById('htPrivateKeySelect').onchange = function (e) {
         if (this.selectedIndex == this.prevIndex) return;
         if (this.selectedIndex == 0) {
             document.getElementById('htPrivateKeyInputDiv').style.display = 'none';
@@ -1265,7 +1265,7 @@ function createInterface() {
         }
         this.prevIndex = this.selectedIndex;
     }
-    document.getElementById('htOtherPublicKeySelect').onclick = function (e) {
+    document.getElementById('htOtherPublicKeySelect').onchange = function (e) {
         if (this.selectedIndex == this.prevIndex) return;
         if (this.selectedIndex == 0) {
             document.getElementById('htOtherPublicKeyInputDiv').style.display = 'none';
