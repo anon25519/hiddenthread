@@ -872,6 +872,8 @@ function createInterface() {
                         <select id="htContainerPackSelect" class="input select" style="max-width:25ch">
                             <option>picsum.photos</option>
                             <option>imagecdn.app</option>
+                            <option>cataas.com (коты)</option>
+                            <option>dog.ceo (собаки)</option>
                         </select>
                         </div>
                         <div id="htContainerInputDiv">

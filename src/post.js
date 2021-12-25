@@ -186,10 +186,22 @@ async function getRandomContainer(dataLength, pack) {
     image.crossOrigin = "anonymous";
     try {
         // ?x=... нужно для отключения кэша
+        let nocache = `?x=${Date.now()}`;
         if (pack == 0) {
-            image.src = `https://picsum.photos/${width}/${height}?x=${Date.now()}`;
-        } else {
-            image.src = `https://random.imagecdn.app/${width}/${height}?x=${Date.now()}`;
+            image.src = `https://picsum.photos/${width}/${height}${nocache}`;
+        } else if (pack == 1) {
+            image.src = `https://random.imagecdn.app/${width}/${height}${nocache}`;
+        } else if (pack == 2) {
+            image.src = `https://cataas.com/cat?width=${width}${nocache}`;
+        } else if (pack == 3) {
+            let jsonUrl = `https://dog.ceo/api/breeds/image/random${nocache}`;
+            let response = await fetch(jsonUrl);
+            if (!response.ok)
+                throw new Error(`fetch not ok, url: ${jsonUrl}`);
+            let obj = await response.json();
+            if (!obj.status || obj.status !== 'success' || !obj.message)
+                throw new Error(`wrong object: ${JSON.stringify(obj)}`);
+            image.src = obj.message;
         }
         await image.decode();
     } catch (e) {
