@@ -1144,7 +1144,7 @@ function createInterface() {
         setStorage({ containerName: this.selectedIndex });
     }
     document.getElementById('htContainerNameSelect').selectedIndex = storage.containerName ? storage.containerName : 0;
-    document.getElementById('htContainerNameSelect').click();
+    document.getElementById('htContainerNameSelect').dispatchEvent(new Event('change'));
 
     document.getElementById('htContainerTypeSelect').onchange = function () {
         document.getElementById('htContainerPackSelectDiv').style.display = (this.selectedIndex == 0) ?
@@ -1165,7 +1165,7 @@ function createInterface() {
         setStorage({ containerType: this.selectedIndex });
     }
     document.getElementById('htContainerTypeSelect').selectedIndex = storage.containerType ? storage.containerType : 0;
-    document.getElementById('htContainerTypeSelect').click();
+    document.getElementById('htContainerTypeSelect').dispatchEvent(new Event('change'));
 
     document.getElementById('htContainerPackSelect').onchange = function () {
         setStorage({ containerPack: this.selectedIndex });
@@ -1205,7 +1205,7 @@ function createInterface() {
                     document.getElementById('hiddenFilesInput').value = null;
                 }
                 // Сбрасываем название картинки, чтобы оно не повторялось
-                document.getElementById('htContainerNameSelect').click();
+                document.getElementById('htContainerNameSelect').dispatchEvent(new Event('change'));
             }
         } catch (e) {
             Utils.trace('HiddenThread: Ошибка при создании скрытопоста: ' + e + ' stack:\n' + e.stack);
