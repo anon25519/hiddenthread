@@ -128,7 +128,7 @@ async function createHiddenPost() {
             isAdjustResolution: document.getElementById('htIsAdjustResolution').checked,
             thresholdDataRatio: parseInt(document.getElementById('htThresholdDataRatio').value) / 100,
             maxDataRatio: parseInt(document.getElementById('htMaxDataRatio').value) / 100,
-            pixelCountAdjust: document.querySelector('input[name="pixelCountAdjust"]:checked').value,
+            pixelCountAdjust: document.querySelector('input[class="pixelCountAdjustClass"]:checked').value,
             minPixelCount: parseInt(document.getElementById('htMinPixelCount').value),
             minPixelCountDeviance: parseInt(document.getElementById('htMinPixelCountDeviance').value) / 100,
             maxPixelCount: parseInt(document.getElementById('htMaxPixelCount').value),
@@ -802,7 +802,7 @@ function createInterface() {
                 </p>
                 <span id="hiddenThreadToggle" style="position: absolute; right: 0; cursor: pointer">${toggleText()}</span>
             </div>
-            <div id="hiddenThreadForm" style="display: ${storage.hidePostForm ? 'none' : ''}">
+            <div id="hiddenThreadForm" style="${storage.hidePostForm ? 'display:none' : ''}">
                 <div style="padding:5px;">
                     <input id="htClearFormButton" type="button" style="padding:5px;margin:auto;display:block;color:red" value="Очистить форму" />
                 </div>
@@ -926,7 +926,7 @@ function createInterface() {
                         <div>
                             <div>
                                 <div>
-                                    <input type="radio" name="pixelCountAdjust" value="pixelcount" checked="checked">
+                                    <input type="radio" id="pixelCountAdjust" class="pixelCountAdjustClass" value="pixelcount" checked="checked">
                                     <label>Ограничение по количеству пикселей</label>
                                 </div>
                                 <div id="htPixelCountAdjustDiv" style="margin-left:18px">
@@ -943,7 +943,7 @@ function createInterface() {
 
                             <div>
                                 <div>
-                                    <input type="radio" name="pixelCountAdjust" value="width">
+                                    <input type="radio" id="widthAdjust" class="pixelCountAdjustClass" value="width">
                                     <label>Ограничение по ширине</label>
                                 </div>
                                 <div id="htWidthAdjustDiv" style="margin-left:18px;display:none">
@@ -960,7 +960,7 @@ function createInterface() {
 
                             <div>
                                 <div>
-                                    <input type="radio" name="pixelCountAdjust" value="height">
+                                    <input type="radio" id="heightAdjust" class="pixelCountAdjustClass" value="height">
                                     <label>Ограничение по высоте</label>
                                 </div>
                                 <div id="htHeightAdjustDiv" style="margin-left:18px;display:none">
@@ -1097,18 +1097,24 @@ function createInterface() {
         document.getElementById('htAdjustResolutionDiv').style.display = adjustResolutionCheck.checked ? 'block' : 'none';
     }
 
-    let pixelCountAdjustRadio = document.querySelectorAll('input[name="pixelCountAdjust"]');
+    let pixelCountAdjustRadio = document.querySelectorAll('input[class="pixelCountAdjustClass"]');
     for (let i = 0; i < pixelCountAdjustRadio.length; i++) {
         pixelCountAdjustRadio[i].addEventListener('change', function() {
             if (this.value == 'pixelcount') {
+                document.getElementById('widthAdjust').checked = false;
+                document.getElementById('heightAdjust').checked = false;
                 document.getElementById('htPixelCountAdjustDiv').style.display = 'block';
                 document.getElementById('htWidthAdjustDiv').style.display = 'none';
                 document.getElementById('htHeightAdjustDiv').style.display = 'none';
             } else if (this.value == 'width') {
+                document.getElementById('pixelCountAdjust').checked = false;
+                document.getElementById('heightAdjust').checked = false;
                 document.getElementById('htPixelCountAdjustDiv').style.display = 'none';
                 document.getElementById('htWidthAdjustDiv').style.display = 'block';
                 document.getElementById('htHeightAdjustDiv').style.display = 'none';
             } else if (this.value == 'height') {
+                document.getElementById('pixelCountAdjust').checked = false;
+                document.getElementById('widthAdjust').checked = false;
                 document.getElementById('htPixelCountAdjustDiv').style.display = 'none';
                 document.getElementById('htWidthAdjustDiv').style.display = 'none';
                 document.getElementById('htHeightAdjustDiv').style.display = 'block';
