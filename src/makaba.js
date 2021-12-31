@@ -544,13 +544,22 @@ function renderHiddenPost(postId, loadedPost, unpackedData) {
 
 
 async function loadAndRenderPost(postId, url, passwords, privateKeys) {
-    let response = await fetch(url);
-    if (!response.ok) throw new Error(`fetch not ok, url: ${url}`);
-    let imgArrayBuffer = await response.arrayBuffer();
-
+    let response = null;
+    let imgArrayBuffer = null;
     let imgId = getImgName(url);
-    document.getElementById("imagesLoadedCount").textContent =
-        parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
+
+    try {
+        response = await fetch(url);
+        if (!response.ok) throw new Error(`fetch not ok, url: ${url}`);
+        imgArrayBuffer = await response.arrayBuffer();
+    } catch (e) {
+        document.getElementById("imagesErrorCount").textContent =
+            parseInt(document.getElementById("imagesErrorCount").textContent) + 1;
+        throw e;
+    } finally {
+        document.getElementById("imagesLoadedCount").textContent =
+            parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
+    }
 
     let loadedPost = null;
     if (storage.isQueueDecodeDisabled) {
@@ -845,10 +854,10 @@ function createInterface() {
                 </div>
                 <div style="padding:5px;text-align:center;">
                     <!--<span id="loadingStatus" style="display: none">Загрузка...</span>-->
-                    Загружено картинок: <span id="imagesLoadedCount">0</span>/<span id="imagesCount">0</span>
+                    Загружено картинок: <span id="imagesLoadedCount">0</span>/<span id="imagesCount">0</span> (неудачно: <span id="imagesErrorCount">0</span>)
                     <br>
                     Загружено скрытопостов: <span id="hiddenPostsLoadedCount">0</span>
-                    (из кэша: <span id="hiddenPostsCachedCount">0</span>)
+                    (из кэша: <span id="hiddenPostsCachedCount">0</span>, в очереди: <span id="hiddenPostsProcessingCount">0</span>)
                 </div>
                 <textarea
                     id="hiddenPostInput"
@@ -1538,6 +1547,7 @@ async function loadHiddenThread() {
     // Запрос на сброс загруженных картинок, чтобы проверить их с измененными паролями
     if (isReloadRequested) {
         document.getElementById("imagesLoadedCount").textContent = loadedPosts.size;
+        document.getElementById("imagesErrorCount").textContent = '0';
         watchedImages = new Set();
         isReloadRequested = false;
     }
@@ -1576,12 +1586,16 @@ async function loadHiddenThread() {
 
             function promiseGenerator() {
                 return new Promise(async function(resolve, reject) {
+                    document.getElementById("hiddenPostsProcessingCount").textContent =
+                        parseInt(document.getElementById("hiddenPostsProcessingCount").textContent) + 1;
                     try {
                         await loadPost(post.postId, image.url, actualPasswords, privateKeys, passwordHashes, privateKeyHashes);
                     }
                     catch(e) {
                         Utils.trace('HiddenThread: Ошибка при загрузке поста: ' + e + ' stack:\n' + e.stack);
                     }
+                    document.getElementById("hiddenPostsProcessingCount").textContent =
+                        parseInt(document.getElementById("hiddenPostsProcessingCount").textContent) - 1;
                     resolve();
                 });
             }
