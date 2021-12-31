@@ -593,12 +593,17 @@ async function loadPostFromImage(imgArrayBuffer, passwords, privateKeys, myPriva
     };
 }
 
-function createImagePreview(blobLink) {
+async function createImagePreview(blobLink) {
+    const MAX_PREVIEW_WIDTH = 200;
+    const MAX_PREVIEW_HEIGHT = 300;
     let imagePreviewLink = document.createElement('a');
     let imagePreview = document.createElement('img');
     imagePreview.src = blobLink;
+    try {
+        await imagePreview.decode();
+    } catch (e) {}
     imagePreviewLink.appendChild(imagePreview);
-    imagePreview.style = 'max-width:200px;max-height:300px;';
+    imagePreview.style = `max-width:${MAX_PREVIEW_WIDTH}px;max-height:${MAX_PREVIEW_HEIGHT}px;`;
     imagePreviewLink.href = blobLink;
     imagePreviewLink.target = "_blank";
 
@@ -689,10 +694,23 @@ function createImagePreview(blobLink) {
     }
 
     imagePreviewLink.onclick = imagePreviewClickListener;
-    return imagePreviewLink;
+
+    let imageDiv = document.createElement('div');
+    let width = imagePreview.width ? imagePreview.width : 0;
+    let height = imagePreview.height ? imagePreview.height : 0;
+    if (width > MAX_PREVIEW_WIDTH) {
+        let scale = width / MAX_PREVIEW_WIDTH;
+        height = height / scale;
+    }
+    if (height > MAX_PREVIEW_HEIGHT) {
+        height = MAX_PREVIEW_HEIGHT;
+    }
+    imageDiv.style.height = `${height + 1}px`;
+    imageDiv.append(imagePreviewLink);
+    return imageDiv;
 }
 
-function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
+async function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
     function createDownloadLink(name, text, blobLink) {
         let downloadLink = document.createElement('a');
         downloadLink.download = name;
@@ -740,7 +758,7 @@ function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
 
         if (isPreview && isImage(mime)) {
             fileDiv.appendChild(document.createElement('br'));
-            fileDiv.appendChild(createImagePreview(blobLink));
+            fileDiv.appendChild(await createImagePreview(blobLink));
         }
         fileLinksDiv.appendChild(fileDiv);
 

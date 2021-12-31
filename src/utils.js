@@ -87,10 +87,12 @@ function trace(s) {
 
 // https://medium.com/@karenmarkosyan/how-to-manage-promises-into-dynamic-queue-with-vanilla-javascript-9d0d1f8d4df5
 class Queue {
-    static queue = [];
-    static pendingPromise = false;
+    constructor() {
+        this.queue = [];
+        this.pendingPromise = false;
+    }
 
-    static enqueue(promise) {
+    enqueue(promise) {
       return new Promise((resolve, reject) => {
           this.queue.push({
               promise,
@@ -101,7 +103,7 @@ class Queue {
       });
     }
 
-  static dequeue() {
+    dequeue() {
       if (this.workingOnPromise) {
         return false;
       }

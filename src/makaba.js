@@ -41,6 +41,9 @@ let otherPublicKeys = [];
 // [{iv:'...', password:'...', otherPublicKey:'...'}, ...]
 let myPrivatePosts = [];
 
+let decodeQueue = new Utils.Queue();
+let renderQueue = new Utils.Queue();
+
 function createElementFromHTML(htmlString) {
     let div = document.createElement('div');
     div.innerHTML = htmlString.trim();
@@ -334,7 +337,7 @@ function getClosingTagIndex(text, i, tag) {
 }
 
 // Добавление HTML скрытопоста к основному посту
-function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
+async function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     Utils.trace(`HiddenThread: Post ${postId} is hidden, its object:`);
     Utils.trace(loadedPost);
     Utils.trace(unpackedData);
@@ -401,7 +404,7 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
         postMetadata.appendChild(postArticleSign);
     }
 
-    postMetadata.appendChild(Post.createFileLinksDiv(unpackedData.files,
+    postMetadata.appendChild(await Post.createFileLinksDiv(unpackedData.files,
         unpackedData.hasSkippedFiles, postId, !storage.isPreviewDisabled));
     postArticle.appendChild(postMetadata);
 
@@ -533,13 +536,36 @@ function parseMessage(message)
     }
 };
 
-function renderHiddenPost(postId, loadedPost, unpackedData) {
-    let res = parseMessage(unpackedData.message);
-    unpackedData.message = res.message;
-    let hiddenPostSubId = addHiddenPostToHtml(postId, loadedPost, unpackedData);
-    addReplyLinks(postId, res.refPostIdList);
-    // TODO: отображение скрытопостов во всплывающих постах с куклоскриптом
-    addHiddenPostToObj(postId, hiddenPostSubId); // Текст скрытопоста берется из HTML
+async function renderHiddenPost(postId, loadedPost, unpackedData) {
+    async function renderHiddenPostImpl() {
+        let needToScroll = document.getElementById(`post-${postId}`).getBoundingClientRect().bottom < 0;
+        let oldHeight = Math.max(document.documentElement.offsetHeight, document.documentElement.scrollHeight);
+
+        let res = parseMessage(unpackedData.message);
+        unpackedData.message = res.message;
+        let hiddenPostSubId = await addHiddenPostToHtml(postId, loadedPost, unpackedData);
+        addReplyLinks(postId, res.refPostIdList);
+        // TODO: отображение скрытопостов во всплывающих постах с куклоскриптом
+        addHiddenPostToObj(postId, hiddenPostSubId); // Текст скрытопоста берется из HTML
+
+        if (needToScroll && storage.isAutoScrollEnabled) {
+            let heightDelta = Math.max(document.documentElement.offsetHeight, document.documentElement.scrollHeight) - oldHeight;
+            window.scrollBy(0, heightDelta);
+        }
+    }
+
+    if (storage.isAutoScrollEnabled) {
+        function promiseGenerator()
+        {
+            return new Promise(async function(resolve, reject) {
+                await renderHiddenPostImpl();
+                resolve();
+            });
+        }
+        await renderQueue.enqueue(promiseGenerator);
+    } else {
+        await renderHiddenPostImpl();
+    }
 }
 
 
@@ -572,7 +598,7 @@ async function loadAndRenderPost(postId, url, passwords, privateKeys) {
                 resolve();
             });
         }
-        await Utils.Queue.enqueue(promiseGenerator);
+        await decodeQueue.enqueue(promiseGenerator);
     }
 
     if (!loadedPost)
@@ -582,7 +608,7 @@ async function loadAndRenderPost(postId, url, passwords, privateKeys) {
     document.getElementById("hiddenPostsLoadedCount").textContent = loadedPosts.size;
 
     let unpackedData = await Post.unzipPostData(loadedPost.zipData);
-    renderHiddenPost(postId, loadedPost, unpackedData);
+    await renderHiddenPost(postId, loadedPost, unpackedData);
 
     return loadedPost;
 }
@@ -623,7 +649,7 @@ async function loadPost(postId, url, passwords, privateKeys, passwordHashes, pri
                 parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
 
             let unpackedPost = await Post.unzipPostData(cachedPost.hiddenPost.zipData);
-            renderHiddenPost(postId, cachedPost.hiddenPost, unpackedPost);
+            await renderHiddenPost(postId, cachedPost.hiddenPost, unpackedPost);
         }
         // В кэше не скрытопост
         else {
@@ -1075,6 +1101,7 @@ function createInterface() {
                 <div><input id="htIsQueueDecodeDisabled" type="checkbox"> <span>Включить параллельное декодирование скрытопостов</span></div>
                 <div><input id="htIsPreviewDisabled" type="checkbox"> <span>Отключить превью картинок в скрытопостах</span></div>
                 <div><input id="htIsFormClearEnabled" type="checkbox"> <span>Включить очистку полей при создании картинки</span></div>
+                <div><input id="htIsAutoScrollEnabled" type="checkbox"> <span>Включить автопрокрутку страницы при загрузке постов</span></div>
                 <div><input id="htPostsColor" maxlength="6" size="6"> <span>Цвет выделения скрытопостов (в hex)</span></div>
                 <div><input id="htMaxImageRes" type="number" min="0" step="1" size="12"> <span>Макс. разрешение загружаемых картинок, Мп (0 - без лимита)</span></div>
                 <div><input id="htMaxCachedPostSize" type="number" min="0" step="1" size="12"> <span>Макс. размер поста в кэше, Кб (0 - без лимита)</span></div>
@@ -1098,6 +1125,7 @@ function createInterface() {
         document.getElementById("htIsQueueDecodeDisabled").checked = storage.isQueueDecodeDisabled;
         document.getElementById("htIsPreviewDisabled").checked = storage.isPreviewDisabled;
         document.getElementById("htIsFormClearEnabled").checked = storage.isFormClearEnabled;
+        document.getElementById("htIsAutoScrollEnabled").checked = storage.isAutoScrollEnabled;
         document.getElementById("htPostsColor").value = storage.postsColor ? storage.postsColor : 'F00000';
         document.getElementById("htMaxImageRes").value = storage.maxImageRes ? storage.maxImageRes :
             (typeof(storage.maxImageRes) == 'number' ? 0 : MAX_IMAGE_RES_DEFAULT);
@@ -1114,6 +1142,7 @@ function createInterface() {
         setStorage({ isQueueDecodeDisabled: document.getElementById("htIsQueueDecodeDisabled").checked });
         setStorage({ isPreviewDisabled: document.getElementById("htIsPreviewDisabled").checked });
         setStorage({ isFormClearEnabled: document.getElementById("htIsFormClearEnabled").checked });
+        setStorage({ isAutoScrollEnabled: document.getElementById("htIsAutoScrollEnabled").checked });
         setStorage({ postsColor: document.getElementById("htPostsColor").value });
         let maxImageRes = parseInt(document.getElementById("htMaxImageRes").value);
         setStorage({ maxImageRes: maxImageRes ? maxImageRes : (typeof(maxImageRes) == 'number' ? 0 : MAX_IMAGE_RES_DEFAULT) });
