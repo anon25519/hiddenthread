@@ -1152,6 +1152,19 @@ function createInterface() {
     document.getElementById('htContainerNameSelect').selectedIndex = storage.containerName ? storage.containerName : 0;
     document.getElementById('htContainerNameSelect').dispatchEvent(new Event('change'));
 
+    function adjustResolutionCheckHandler() {
+        // Для случайных и сгенерированных нет оригинального разрешения
+        let containerType = document.getElementById('htContainerTypeSelect').selectedIndex;
+        let containerPack = document.getElementById('htContainerPackSelect').selectedIndex;
+        if ((containerType == 0 && (containerPack == 0 || containerPack == 1)) || containerType == 3) {
+            document.getElementById('htIsAdjustResolution').checked = true;
+            document.getElementById('htIsAdjustResolution').disabled = true;
+            document.getElementById('htAdjustResolutionDiv').style.display = 'block';
+        } else {
+            document.getElementById('htIsAdjustResolution').disabled = false;
+        }
+    }
+
     document.getElementById('htContainerTypeSelect').onchange = function () {
         document.getElementById('htContainerPackSelectDiv').style.display = (this.selectedIndex == 0) ?
             'inline-block' : 'none';
@@ -1160,23 +1173,19 @@ function createInterface() {
         document.getElementById('htContainerInputDiv').style.display = (this.selectedIndex == 2) ?
             'block' : 'none';
 
-        // Для случайных и сгенерированных нет оригинального разрешения
-        if (this.selectedIndex == 0 || this.selectedIndex == 3) {
-            document.getElementById('htIsAdjustResolution').checked = true;
-            document.getElementById('htIsAdjustResolution').disabled = true;
-            document.getElementById('htAdjustResolutionDiv').style.display = 'block';
-        } else {
-            document.getElementById('htIsAdjustResolution').disabled = false;
-        }
+        adjustResolutionCheckHandler();
         setStorage({ containerType: this.selectedIndex });
     }
     document.getElementById('htContainerTypeSelect').selectedIndex = storage.containerType ? storage.containerType : 0;
-    document.getElementById('htContainerTypeSelect').dispatchEvent(new Event('change'));
 
     document.getElementById('htContainerPackSelect').onchange = function () {
+        adjustResolutionCheckHandler();
         setStorage({ containerPack: this.selectedIndex });
     }
     document.getElementById('htContainerPackSelect').selectedIndex = storage.containerPack ? storage.containerPack : 0;
+
+    document.getElementById('htContainerTypeSelect').dispatchEvent(new Event('change'));
+    document.getElementById('htContainerPackSelect').dispatchEvent(new Event('change'));
 
     document.getElementById('htClearFormButton').onclick = function () {
         document.getElementById('hiddenPostInput').value = '';

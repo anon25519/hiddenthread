@@ -90,7 +90,7 @@ async function hideDataToImage(container, data) {
     canvas.height = Math.ceil(imageBitmap.height * scale);
 
     let ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
     ctx.scale(scale, scale);
     ctx.drawImage(imageBitmap, 0, 0, imageBitmap.width, imageBitmap.height);
     let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -236,7 +236,7 @@ async function getRandomContainer(container, dataLength) {
         } else if (container.pack == 1) {
             image.src = `https://random.imagecdn.app/${width}/${height}?${nocache}`;
         } else if (container.pack == 2) {
-            image.src = `https://cataas.com/cat?width=${width}&${nocache}`;
+            image.src = `https://cataas.com/cat?${nocache}`;
         } else if (container.pack == 3) {
             let jsonUrl = `https://dog.ceo/api/breeds/image/random?${nocache}`;
             let response = await fetch(jsonUrl);
@@ -246,6 +246,11 @@ async function getRandomContainer(container, dataLength) {
             if (!obj.status || obj.status !== 'success' || !obj.message)
                 throw new Error(`wrong object: ${JSON.stringify(obj)}`);
             image.src = obj.message;
+        }
+
+        // Для картинок без родного разрешения отключаем подстройку, чтобы не масштабировать лишний раз
+        if (container.pack == 0 || container.pack == 1) {
+            container.isAdjustResolution = false
         }
         await image.decode();
     } catch (e) {
