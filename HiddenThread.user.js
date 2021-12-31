@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.5.7
+// @version      0.5.8
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -2902,7 +2902,7 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5.7";
+const CURRENT_VERSION = "0.5.8";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
@@ -2934,6 +2934,14 @@ let otherPublicKeyAliases = {};
 let passwords = [];
 let privateKeys = [];
 let otherPublicKeys = [];
+
+// Массив для хранения временных паролей для отправленных приватных постов
+// Сопоставление нужных паролей к постам делается по IV
+// [{iv:'...', password:'...', otherPublicKey:'...'}, ...]
+let myPrivatePosts = [];
+
+let decodeQueue = new Utils.Queue();
+let renderQueue = new Utils.Queue();
 
 function createElementFromHTML(htmlString) {
     let div = document.createElement('div');
@@ -3019,7 +3027,9 @@ async function createHiddenPost() {
         container = new ImageData(new Uint8ClampedArray(4), 1, 1);
     }
 
-    let imageResult = await Post.createHiddenPostImpl(
+    let otherPublicKey = document.getElementById('htOtherPublicKey').value;
+
+    let createPostResult = await Post.createHiddenPostImpl(
         {
             image: container,
             pack: pack,
@@ -3045,7 +3055,17 @@ async function createHiddenPost() {
         document.getElementById('hiddenFilesInput').files,
         document.getElementById('htPassword').value,
         document.getElementById('htPrivateKey').value,
-        document.getElementById('htOtherPublicKey').value);
+        otherPublicKey);
+
+    let imageResult = createPostResult.imageResult;
+
+    if (otherPublicKey) {
+        myPrivatePosts.push({
+            iv: createPostResult.iv,
+            password: createPostResult.password,
+            otherPublicKey: otherPublicKey
+        });
+    }
 
     let toBlobPromise = new Promise(function(resolve, reject) {
         imageResult.canvas.toBlob(function(blob) {
@@ -3216,7 +3236,7 @@ function getClosingTagIndex(text, i, tag) {
 }
 
 // Добавление HTML скрытопоста к основному посту
-function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
+async function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     Utils.trace(`HiddenThread: Post ${postId} is hidden, its object:`);
     Utils.trace(loadedPost);
     Utils.trace(unpackedData);
@@ -3263,6 +3283,14 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
             `<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом `+
             `(${privateKeyAliases[loadedPost.privateKey]})</i></div>`));
     }
+    if (loadedPost.otherPublicKey) {
+        let publicKeyAlias = otherPublicKeyAliases[loadedPost.otherPublicKey];
+        if (!publicKeyAlias)
+            publicKeyAlias = loadedPost.otherPublicKey;
+        postMetadata.appendChild(createElementFromHTML(
+            `<div style="color:orange;"><i>Приватный пост для получателя ${publicKeyAlias}<br>`+
+            `(внимание: этот пост не будет вам виден после удаления из кэша)</i></div>`));
+    }
 
     if (loadedPost.publicKey) {
         let postArticleSign = document.createElement('div');
@@ -3275,7 +3303,7 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
         postMetadata.appendChild(postArticleSign);
     }
 
-    postMetadata.appendChild(Post.createFileLinksDiv(unpackedData.files,
+    postMetadata.appendChild(await Post.createFileLinksDiv(unpackedData.files,
         unpackedData.hasSkippedFiles, postId, !storage.isPreviewDisabled));
     postArticle.appendChild(postMetadata);
 
@@ -3381,6 +3409,18 @@ function parseMessage(message)
          .replace(/"/g, "&quot;")
          .replace(/'/g, "&#039;");
 
+    message = message.replaceAll(new RegExp('(\\b(https?):\/\/[-A-Z0-9+&@#\/%?=~_|!:;,.]{1,1000})', 'gi'),
+        function(m, s) {
+            let link = s.replace(/&amp;/g, "&");
+            try {
+                let url = new URL(link);
+            } catch (_) {
+                return s;
+            }
+            return `<a href="${link}" target="_blank" rel="nofollow noopener noreferrer">${link}</a>`;
+        }
+    );
+
     let refPostIdList = [];
 
     message = message.replaceAll(new RegExp('&gt;&gt;(\\d{1,10})', 'g'),
@@ -3395,37 +3435,69 @@ function parseMessage(message)
     }
 };
 
-function renderHiddenPost(postId, loadedPost, unpackedData) {
-    let res = parseMessage(unpackedData.message);
-    unpackedData.message = res.message;
-    let hiddenPostSubId = addHiddenPostToHtml(postId, loadedPost, unpackedData);
-    addReplyLinks(postId, res.refPostIdList);
-    // TODO: отображение скрытопостов во всплывающих постах с куклоскриптом
-    addHiddenPostToObj(postId, hiddenPostSubId); // Текст скрытопоста берется из HTML
+async function renderHiddenPost(postId, loadedPost, unpackedData) {
+    async function renderHiddenPostImpl() {
+        let needToScroll = document.getElementById(`post-${postId}`).getBoundingClientRect().bottom < 0;
+        let oldHeight = Math.max(document.documentElement.offsetHeight, document.documentElement.scrollHeight);
+
+        let res = parseMessage(unpackedData.message);
+        unpackedData.message = res.message;
+        let hiddenPostSubId = await addHiddenPostToHtml(postId, loadedPost, unpackedData);
+        addReplyLinks(postId, res.refPostIdList);
+        // TODO: отображение скрытопостов во всплывающих постах с куклоскриптом
+        addHiddenPostToObj(postId, hiddenPostSubId); // Текст скрытопоста берется из HTML
+
+        if (needToScroll && storage.isAutoScrollEnabled) {
+            let heightDelta = Math.max(document.documentElement.offsetHeight, document.documentElement.scrollHeight) - oldHeight;
+            window.scrollBy(0, heightDelta);
+        }
+    }
+
+    if (storage.isAutoScrollEnabled) {
+        function promiseGenerator()
+        {
+            return new Promise(async function(resolve, reject) {
+                await renderHiddenPostImpl();
+                resolve();
+            });
+        }
+        await renderQueue.enqueue(promiseGenerator);
+    } else {
+        await renderHiddenPostImpl();
+    }
 }
 
 
 async function loadAndRenderPost(postId, url, passwords, privateKeys) {
-    let response = await fetch(url);
-    if (!response.ok) throw new Error(`fetch not ok, url: ${url}`);
-    let imgArrayBuffer = await response.arrayBuffer();
-
+    let response = null;
+    let imgArrayBuffer = null;
     let imgId = getImgName(url);
-    document.getElementById("imagesLoadedCount").textContent =
-        parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
+
+    try {
+        response = await fetch(url);
+        if (!response.ok) throw new Error(`fetch not ok, url: ${url}`);
+        imgArrayBuffer = await response.arrayBuffer();
+    } catch (e) {
+        document.getElementById("imagesErrorCount").textContent =
+            parseInt(document.getElementById("imagesErrorCount").textContent) + 1;
+        throw e;
+    } finally {
+        document.getElementById("imagesLoadedCount").textContent =
+            parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
+    }
 
     let loadedPost = null;
     if (storage.isQueueDecodeDisabled) {
-        loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys);
+        loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys, myPrivatePosts);
     } else {
         function promiseGenerator()
         {
             return new Promise(async function(resolve, reject) {
-                loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys);
+                loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys, myPrivatePosts);
                 resolve();
             });
         }
-        await Utils.Queue.enqueue(promiseGenerator);
+        await decodeQueue.enqueue(promiseGenerator);
     }
 
     if (!loadedPost)
@@ -3435,7 +3507,7 @@ async function loadAndRenderPost(postId, url, passwords, privateKeys) {
     document.getElementById("hiddenPostsLoadedCount").textContent = loadedPosts.size;
 
     let unpackedData = await Post.unzipPostData(loadedPost.zipData);
-    renderHiddenPost(postId, loadedPost, unpackedData);
+    await renderHiddenPost(postId, loadedPost, unpackedData);
 
     return loadedPost;
 }
@@ -3476,7 +3548,7 @@ async function loadPost(postId, url, passwords, privateKeys, passwordHashes, pri
                 parseInt(document.getElementById("imagesLoadedCount").textContent) + 1;
 
             let unpackedPost = await Post.unzipPostData(cachedPost.hiddenPost.zipData);
-            renderHiddenPost(postId, cachedPost.hiddenPost, unpackedPost);
+            await renderHiddenPost(postId, cachedPost.hiddenPost, unpackedPost);
         }
         // В кэше не скрытопост
         else {
@@ -3707,10 +3779,10 @@ function createInterface() {
                 </div>
                 <div style="padding:5px;text-align:center;">
                     <!--<span id="loadingStatus" style="display: none">Загрузка...</span>-->
-                    Загружено картинок: <span id="imagesLoadedCount">0</span>/<span id="imagesCount">0</span>
+                    Загружено картинок: <span id="imagesLoadedCount">0</span>/<span id="imagesCount">0</span> (неудачно: <span id="imagesErrorCount">0</span>)
                     <br>
                     Загружено скрытопостов: <span id="hiddenPostsLoadedCount">0</span>
-                    (из кэша: <span id="hiddenPostsCachedCount">0</span>)
+                    (из кэша: <span id="hiddenPostsCachedCount">0</span>, в очереди: <span id="hiddenPostsProcessingCount">0</span>)
                 </div>
                 <textarea
                     id="hiddenPostInput"
@@ -3928,6 +4000,7 @@ function createInterface() {
                 <div><input id="htIsQueueDecodeDisabled" type="checkbox"> <span>Включить параллельное декодирование скрытопостов</span></div>
                 <div><input id="htIsPreviewDisabled" type="checkbox"> <span>Отключить превью картинок в скрытопостах</span></div>
                 <div><input id="htIsFormClearEnabled" type="checkbox"> <span>Включить очистку полей при создании картинки</span></div>
+                <div><input id="htIsAutoScrollEnabled" type="checkbox"> <span>Включить автопрокрутку страницы при загрузке постов</span></div>
                 <div><input id="htPostsColor" maxlength="6" size="6"> <span>Цвет выделения скрытопостов (в hex)</span></div>
                 <div><input id="htMaxImageRes" type="number" min="0" step="1" size="12"> <span>Макс. разрешение загружаемых картинок, Мп (0 - без лимита)</span></div>
                 <div><input id="htMaxCachedPostSize" type="number" min="0" step="1" size="12"> <span>Макс. размер поста в кэше, Кб (0 - без лимита)</span></div>
@@ -3951,6 +4024,7 @@ function createInterface() {
         document.getElementById("htIsQueueDecodeDisabled").checked = storage.isQueueDecodeDisabled;
         document.getElementById("htIsPreviewDisabled").checked = storage.isPreviewDisabled;
         document.getElementById("htIsFormClearEnabled").checked = storage.isFormClearEnabled;
+        document.getElementById("htIsAutoScrollEnabled").checked = storage.isAutoScrollEnabled;
         document.getElementById("htPostsColor").value = storage.postsColor ? storage.postsColor : 'F00000';
         document.getElementById("htMaxImageRes").value = storage.maxImageRes ? storage.maxImageRes :
             (typeof(storage.maxImageRes) == 'number' ? 0 : MAX_IMAGE_RES_DEFAULT);
@@ -3967,6 +4041,7 @@ function createInterface() {
         setStorage({ isQueueDecodeDisabled: document.getElementById("htIsQueueDecodeDisabled").checked });
         setStorage({ isPreviewDisabled: document.getElementById("htIsPreviewDisabled").checked });
         setStorage({ isFormClearEnabled: document.getElementById("htIsFormClearEnabled").checked });
+        setStorage({ isAutoScrollEnabled: document.getElementById("htIsAutoScrollEnabled").checked });
         setStorage({ postsColor: document.getElementById("htPostsColor").value });
         let maxImageRes = parseInt(document.getElementById("htMaxImageRes").value);
         setStorage({ maxImageRes: maxImageRes ? maxImageRes : (typeof(maxImageRes) == 'number' ? 0 : MAX_IMAGE_RES_DEFAULT) });
@@ -4051,6 +4126,19 @@ function createInterface() {
     document.getElementById('htContainerNameSelect').selectedIndex = storage.containerName ? storage.containerName : 0;
     document.getElementById('htContainerNameSelect').dispatchEvent(new Event('change'));
 
+    function adjustResolutionCheckHandler() {
+        // Для случайных и сгенерированных нет оригинального разрешения
+        let containerType = document.getElementById('htContainerTypeSelect').selectedIndex;
+        let containerPack = document.getElementById('htContainerPackSelect').selectedIndex;
+        if ((containerType == 0 && (containerPack == 0 || containerPack == 1)) || containerType == 3) {
+            document.getElementById('htIsAdjustResolution').checked = true;
+            document.getElementById('htIsAdjustResolution').disabled = true;
+            document.getElementById('htAdjustResolutionDiv').style.display = 'block';
+        } else {
+            document.getElementById('htIsAdjustResolution').disabled = false;
+        }
+    }
+
     document.getElementById('htContainerTypeSelect').onchange = function () {
         document.getElementById('htContainerPackSelectDiv').style.display = (this.selectedIndex == 0) ?
             'inline-block' : 'none';
@@ -4059,23 +4147,19 @@ function createInterface() {
         document.getElementById('htContainerInputDiv').style.display = (this.selectedIndex == 2) ?
             'block' : 'none';
 
-        // Для случайных и сгенерированных нет оригинального разрешения
-        if (this.selectedIndex == 0 || this.selectedIndex == 3) {
-            document.getElementById('htIsAdjustResolution').checked = true;
-            document.getElementById('htIsAdjustResolution').disabled = true;
-            document.getElementById('htAdjustResolutionDiv').style.display = 'block';
-        } else {
-            document.getElementById('htIsAdjustResolution').disabled = false;
-        }
+        adjustResolutionCheckHandler();
         setStorage({ containerType: this.selectedIndex });
     }
     document.getElementById('htContainerTypeSelect').selectedIndex = storage.containerType ? storage.containerType : 0;
-    document.getElementById('htContainerTypeSelect').dispatchEvent(new Event('change'));
 
     document.getElementById('htContainerPackSelect').onchange = function () {
+        adjustResolutionCheckHandler();
         setStorage({ containerPack: this.selectedIndex });
     }
     document.getElementById('htContainerPackSelect').selectedIndex = storage.containerPack ? storage.containerPack : 0;
+
+    document.getElementById('htContainerTypeSelect').dispatchEvent(new Event('change'));
+    document.getElementById('htContainerPackSelect').dispatchEvent(new Event('change'));
 
     document.getElementById('htClearFormButton').onclick = function () {
         document.getElementById('hiddenPostInput').value = '';
@@ -4391,6 +4475,7 @@ async function loadHiddenThread() {
     // Запрос на сброс загруженных картинок, чтобы проверить их с измененными паролями
     if (isReloadRequested) {
         document.getElementById("imagesLoadedCount").textContent = loadedPosts.size;
+        document.getElementById("imagesErrorCount").textContent = '0';
         watchedImages = new Set();
         isReloadRequested = false;
     }
@@ -4429,12 +4514,16 @@ async function loadHiddenThread() {
 
             function promiseGenerator() {
                 return new Promise(async function(resolve, reject) {
+                    document.getElementById("hiddenPostsProcessingCount").textContent =
+                        parseInt(document.getElementById("hiddenPostsProcessingCount").textContent) + 1;
                     try {
                         await loadPost(post.postId, image.url, actualPasswords, privateKeys, passwordHashes, privateKeyHashes);
                     }
                     catch(e) {
                         Utils.trace('HiddenThread: Ошибка при загрузке поста: ' + e + ' stack:\n' + e.stack);
                     }
+                    document.getElementById("hiddenPostsProcessingCount").textContent =
+                        parseInt(document.getElementById("hiddenPostsProcessingCount").textContent) - 1;
                     resolve();
                 });
             }
@@ -4604,7 +4693,7 @@ async function hideDataToImage(container, data) {
     canvas.height = Math.ceil(imageBitmap.height * scale);
 
     let ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
     ctx.scale(scale, scale);
     ctx.drawImage(imageBitmap, 0, 0, imageBitmap.width, imageBitmap.height);
     let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -4713,7 +4802,7 @@ async function encryptPost(message, files, password, privateKey, otherPublicKey)
         keyAndData.set(encryptedData, oneTimePublicKey.length);
         encryptedData = keyAndData;
     }
-    return encryptedData;
+    return { data: encryptedData, password: password };
 }
 
 async function getContainer(url) {
@@ -4750,7 +4839,7 @@ async function getRandomContainer(container, dataLength) {
         } else if (container.pack == 1) {
             image.src = `https://random.imagecdn.app/${width}/${height}?${nocache}`;
         } else if (container.pack == 2) {
-            image.src = `https://cataas.com/cat?width=${width}&${nocache}`;
+            image.src = `https://cataas.com/cat?${nocache}`;
         } else if (container.pack == 3) {
             let jsonUrl = `https://dog.ceo/api/breeds/image/random?${nocache}`;
             let response = await fetch(jsonUrl);
@@ -4761,6 +4850,11 @@ async function getRandomContainer(container, dataLength) {
                 throw new Error(`wrong object: ${JSON.stringify(obj)}`);
             image.src = obj.message;
         }
+
+        // Для картинок без родного разрешения отключаем подстройку, чтобы не масштабировать лишний раз
+        if (container.pack == 0 || container.pack == 1) {
+            container.isAdjustResolution = false
+        }
         await image.decode();
     } catch (e) {
         Utils.trace(`HiddenThread: ошибка при загрузке случайного контейнера "${image.src}": ${e}`);
@@ -4770,19 +4864,23 @@ async function getRandomContainer(container, dataLength) {
 }
 
 async function createHiddenPostImpl(container, message, files, password, privateKey, otherPublicKey) {
-    let encryptedData = await encryptPost(message, files, password, privateKey, otherPublicKey);
+    let encryptedPost = await encryptPost(message, files, password, privateKey, otherPublicKey);
     if (!container.image) {
         if (typeof(container.pack) == 'number') {
-            container.image = await getRandomContainer(container, encryptedData.length);
+            container.image = await getRandomContainer(container, encryptedPost.data.length);
         } else if (container.url) {
             container.image = await getContainer(container.url);
         } else {
             throw new Error('Введите ссылку для загрузки контейнера!');
         }
     }
-    let imageResult = await hideDataToImage(container, encryptedData);
+    let imageResult = await hideDataToImage(container, encryptedPost.data);
 
-    return imageResult;
+    return {
+        imageResult: imageResult,
+        password: encryptedPost.password,
+        iv: encryptedPost.data.subarray(0, Crypto.IV_SIZE)
+    };
 }
 
 async function getMimeType(blob) {
@@ -4980,7 +5078,7 @@ async function getImageData(imgArrayBuffer) {
 }
 
 // Возвращает объект скрытого поста
-async function loadPostFromImage(imgArrayBuffer, passwords, privateKeys) {
+async function loadPostFromImage(imgArrayBuffer, passwords, privateKeys, myPrivatePosts) {
     let imageData = await getImageData(imgArrayBuffer);
 
     let hiddenDataHeader = null;
@@ -5002,20 +5100,47 @@ async function loadPostFromImage(imgArrayBuffer, passwords, privateKeys) {
     }
 
 
-    // Пробуем расшифровать как публичный пост
     let isPrivate = false;
     let decryptedData = null;
     let correctPassword = null;
-    for (let password of passwords) {
-        decryptedData = await decryptData(password.value, hiddenDataHeader, imageData.data, 0);
-        if (decryptedData) {
-            correctPassword = password.value;
-            break;
+    let correctPrivateKey = null;
+    let otherPublicKey = null;
+    let iv = hiddenDataHeader.subarray(0, Crypto.IV_SIZE);
+
+    // Пробуем расшифровать как приватный пост, отправленный нами
+    if (hiddenDataPrivatePostHeader) {
+        for (let myPrivatePost of myPrivatePosts) {
+            let ivMatch = true;
+            for (let i = 0; i < Crypto.IV_SIZE; i++) {
+                if (iv[i] != myPrivatePost.iv[i]) {
+                    ivMatch = false;
+                    break;
+                }
+            }
+            if (!ivMatch) continue;
+    
+            decryptedData = await decryptData(myPrivatePost.password,
+                hiddenDataPrivatePostHeader.subarray(Crypto.PUBLIC_KEY_SIZE),
+                imageData.data, Crypto.PUBLIC_KEY_SIZE);
+            if (decryptedData) {
+                otherPublicKey = myPrivatePost.otherPublicKey;
+                break;
+            }
         }
     }
 
-    let correctPrivateKey = null;
-    if (decryptedData == null && privateKeys.length > 0) {
+    if (decryptedData == null) {
+        // Пробуем расшифровать как публичный пост
+        for (let password of passwords) {
+            decryptedData = await decryptData(password.value, hiddenDataHeader, imageData.data, 0);
+            if (decryptedData) {
+                correctPassword = password.value;
+                break;
+            }
+        }
+    }
+
+    if (decryptedData == null && privateKeys.length > 0 && hiddenDataPrivatePostHeader) {
         isPrivate = true;
         // Генерируем секрет с одноразовым публичным ключом отправителя и своим приватным ключом
         let hiddenOneTimePublicKey = hiddenDataPrivatePostHeader.subarray(0, Crypto.PUBLIC_KEY_SIZE);
@@ -5062,6 +5187,7 @@ async function loadPostFromImage(imgArrayBuffer, passwords, privateKeys) {
     return {
         password: correctPassword,
         privateKey: correctPrivateKey,
+        otherPublicKey: otherPublicKey,
         timestamp: decryptedData.header.timestamp,
         publicKey: verifyResult ? verifyResult.publicKey : null,
         isVerified: verifyResult ? verifyResult.isVerified : null,
@@ -5070,12 +5196,17 @@ async function loadPostFromImage(imgArrayBuffer, passwords, privateKeys) {
     };
 }
 
-function createImagePreview(blobLink) {
+async function createImagePreview(blobLink) {
+    const MAX_PREVIEW_WIDTH = 200;
+    const MAX_PREVIEW_HEIGHT = 300;
     let imagePreviewLink = document.createElement('a');
     let imagePreview = document.createElement('img');
     imagePreview.src = blobLink;
+    try {
+        await imagePreview.decode();
+    } catch (e) {}
     imagePreviewLink.appendChild(imagePreview);
-    imagePreview.style = 'max-width:200px;max-height:300px;';
+    imagePreview.style = `max-width:${MAX_PREVIEW_WIDTH}px;max-height:${MAX_PREVIEW_HEIGHT}px;`;
     imagePreviewLink.href = blobLink;
     imagePreviewLink.target = "_blank";
 
@@ -5166,10 +5297,23 @@ function createImagePreview(blobLink) {
     }
 
     imagePreviewLink.onclick = imagePreviewClickListener;
-    return imagePreviewLink;
+
+    let imageDiv = document.createElement('div');
+    let width = imagePreview.width ? imagePreview.width : 0;
+    let height = imagePreview.height ? imagePreview.height : 0;
+    if (width > MAX_PREVIEW_WIDTH) {
+        let scale = width / MAX_PREVIEW_WIDTH;
+        height = height / scale;
+    }
+    if (height > MAX_PREVIEW_HEIGHT) {
+        height = MAX_PREVIEW_HEIGHT;
+    }
+    imageDiv.style.height = `${height + 1}px`;
+    imageDiv.append(imagePreviewLink);
+    return imageDiv;
 }
 
-function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
+async function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
     function createDownloadLink(name, text, blobLink) {
         let downloadLink = document.createElement('a');
         downloadLink.download = name;
@@ -5217,7 +5361,7 @@ function createFileLinksDiv(files, hasSkippedFiles, postId, isPreview) {
 
         if (isPreview && isImage(mime)) {
             fileDiv.appendChild(document.createElement('br'));
-            fileDiv.appendChild(createImagePreview(blobLink));
+            fileDiv.appendChild(await createImagePreview(blobLink));
         }
         fileLinksDiv.appendChild(fileDiv);
 
@@ -5489,10 +5633,12 @@ function trace(s) {
 
 // https://medium.com/@karenmarkosyan/how-to-manage-promises-into-dynamic-queue-with-vanilla-javascript-9d0d1f8d4df5
 class Queue {
-    static queue = [];
-    static pendingPromise = false;
+    constructor() {
+        this.queue = [];
+        this.pendingPromise = false;
+    }
 
-    static enqueue(promise) {
+    enqueue(promise) {
       return new Promise((resolve, reject) => {
           this.queue.push({
               promise,
@@ -5503,7 +5649,7 @@ class Queue {
       });
     }
 
-  static dequeue() {
+    dequeue() {
       if (this.workingOnPromise) {
         return false;
       }
