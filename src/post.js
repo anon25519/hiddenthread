@@ -199,7 +199,7 @@ async function encryptPost(message, files, password, privateKey, otherPublicKey)
         keyAndData.set(encryptedData, oneTimePublicKey.length);
         encryptedData = keyAndData;
     }
-    return encryptedData;
+    return { data: encryptedData, password: password };
 }
 
 async function getContainer(url) {
@@ -261,19 +261,23 @@ async function getRandomContainer(container, dataLength) {
 }
 
 async function createHiddenPostImpl(container, message, files, password, privateKey, otherPublicKey) {
-    let encryptedData = await encryptPost(message, files, password, privateKey, otherPublicKey);
+    let encryptedPost = await encryptPost(message, files, password, privateKey, otherPublicKey);
     if (!container.image) {
         if (typeof(container.pack) == 'number') {
-            container.image = await getRandomContainer(container, encryptedData.length);
+            container.image = await getRandomContainer(container, encryptedPost.data.length);
         } else if (container.url) {
             container.image = await getContainer(container.url);
         } else {
             throw new Error('Введите ссылку для загрузки контейнера!');
         }
     }
-    let imageResult = await hideDataToImage(container, encryptedData);
+    let imageResult = await hideDataToImage(container, encryptedPost.data);
 
-    return imageResult;
+    return {
+        imageResult: imageResult,
+        password: encryptedPost.password,
+        iv: encryptedPost.data.subarray(0, Crypto.IV_SIZE)
+    };
 }
 
 async function getMimeType(blob) {
@@ -471,7 +475,7 @@ async function getImageData(imgArrayBuffer) {
 }
 
 // Возвращает объект скрытого поста
-async function loadPostFromImage(imgArrayBuffer, passwords, privateKeys) {
+async function loadPostFromImage(imgArrayBuffer, passwords, privateKeys, myPrivatePosts) {
     let imageData = await getImageData(imgArrayBuffer);
 
     let hiddenDataHeader = null;
@@ -493,20 +497,47 @@ async function loadPostFromImage(imgArrayBuffer, passwords, privateKeys) {
     }
 
 
-    // Пробуем расшифровать как публичный пост
     let isPrivate = false;
     let decryptedData = null;
     let correctPassword = null;
-    for (let password of passwords) {
-        decryptedData = await decryptData(password.value, hiddenDataHeader, imageData.data, 0);
-        if (decryptedData) {
-            correctPassword = password.value;
-            break;
+    let correctPrivateKey = null;
+    let otherPublicKey = null;
+    let iv = hiddenDataHeader.subarray(0, Crypto.IV_SIZE);
+
+    // Пробуем расшифровать как приватный пост, отправленный нами
+    if (hiddenDataPrivatePostHeader) {
+        for (let myPrivatePost of myPrivatePosts) {
+            let ivMatch = true;
+            for (let i = 0; i < Crypto.IV_SIZE; i++) {
+                if (iv[i] != myPrivatePost.iv[i]) {
+                    ivMatch = false;
+                    break;
+                }
+            }
+            if (!ivMatch) continue;
+    
+            decryptedData = await decryptData(myPrivatePost.password,
+                hiddenDataPrivatePostHeader.subarray(Crypto.PUBLIC_KEY_SIZE),
+                imageData.data, Crypto.PUBLIC_KEY_SIZE);
+            if (decryptedData) {
+                otherPublicKey = myPrivatePost.otherPublicKey;
+                break;
+            }
         }
     }
 
-    let correctPrivateKey = null;
-    if (decryptedData == null && privateKeys.length > 0) {
+    if (decryptedData == null) {
+        // Пробуем расшифровать как публичный пост
+        for (let password of passwords) {
+            decryptedData = await decryptData(password.value, hiddenDataHeader, imageData.data, 0);
+            if (decryptedData) {
+                correctPassword = password.value;
+                break;
+            }
+        }
+    }
+
+    if (decryptedData == null && privateKeys.length > 0 && hiddenDataPrivatePostHeader) {
         isPrivate = true;
         // Генерируем секрет с одноразовым публичным ключом отправителя и своим приватным ключом
         let hiddenOneTimePublicKey = hiddenDataPrivatePostHeader.subarray(0, Crypto.PUBLIC_KEY_SIZE);
@@ -553,6 +584,7 @@ async function loadPostFromImage(imgArrayBuffer, passwords, privateKeys) {
     return {
         password: correctPassword,
         privateKey: correctPrivateKey,
+        otherPublicKey: otherPublicKey,
         timestamp: decryptedData.header.timestamp,
         publicKey: verifyResult ? verifyResult.publicKey : null,
         isVerified: verifyResult ? verifyResult.isVerified : null,

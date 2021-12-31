@@ -36,6 +36,11 @@ let passwords = [];
 let privateKeys = [];
 let otherPublicKeys = [];
 
+// Массив для хранения временных паролей для отправленных приватных постов
+// Сопоставление нужных паролей к постам делается по IV
+// [{iv:'...', password:'...', otherPublicKey:'...'}, ...]
+let myPrivatePosts = [];
+
 function createElementFromHTML(htmlString) {
     let div = document.createElement('div');
     div.innerHTML = htmlString.trim();
@@ -120,7 +125,9 @@ async function createHiddenPost() {
         container = new ImageData(new Uint8ClampedArray(4), 1, 1);
     }
 
-    let imageResult = await Post.createHiddenPostImpl(
+    let otherPublicKey = document.getElementById('htOtherPublicKey').value;
+
+    let createPostResult = await Post.createHiddenPostImpl(
         {
             image: container,
             pack: pack,
@@ -146,7 +153,17 @@ async function createHiddenPost() {
         document.getElementById('hiddenFilesInput').files,
         document.getElementById('htPassword').value,
         document.getElementById('htPrivateKey').value,
-        document.getElementById('htOtherPublicKey').value);
+        otherPublicKey);
+
+    let imageResult = createPostResult.imageResult;
+
+    if (otherPublicKey) {
+        myPrivatePosts.push({
+            iv: createPostResult.iv,
+            password: createPostResult.password,
+            otherPublicKey: otherPublicKey
+        });
+    }
 
     let toBlobPromise = new Promise(function(resolve, reject) {
         imageResult.canvas.toBlob(function(blob) {
@@ -364,6 +381,14 @@ function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
             `<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом `+
             `(${privateKeyAliases[loadedPost.privateKey]})</i></div>`));
     }
+    if (loadedPost.otherPublicKey) {
+        let publicKeyAlias = otherPublicKeyAliases[loadedPost.otherPublicKey];
+        if (!publicKeyAlias)
+            publicKeyAlias = loadedPost.otherPublicKey;
+        postMetadata.appendChild(createElementFromHTML(
+            `<div style="color:orange;"><i>Приватный пост для получателя ${publicKeyAlias}<br>`+
+            `(внимание: этот пост не будет вам виден после удаления из кэша)</i></div>`));
+    }
 
     if (loadedPost.publicKey) {
         let postArticleSign = document.createElement('div');
@@ -529,12 +554,12 @@ async function loadAndRenderPost(postId, url, passwords, privateKeys) {
 
     let loadedPost = null;
     if (storage.isQueueDecodeDisabled) {
-        loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys);
+        loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys, myPrivatePosts);
     } else {
         function promiseGenerator()
         {
             return new Promise(async function(resolve, reject) {
-                loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys);
+                loadedPost = await Post.loadPostFromImage(imgArrayBuffer, passwords, privateKeys, myPrivatePosts);
                 resolve();
             });
         }
