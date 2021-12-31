@@ -482,6 +482,18 @@ function parseMessage(message)
          .replace(/"/g, "&quot;")
          .replace(/'/g, "&#039;");
 
+    message = message.replaceAll(new RegExp('(\\b(https?):\/\/[-A-Z0-9+&@#\/%?=~_|!:;,.]{1,1000})', 'gi'),
+        function(m, s) {
+            let link = s.replace(/&amp;/g, "&");
+            try {
+                let url = new URL(link);
+            } catch (_) {
+                return s;
+            }
+            return `<a href="${link}" target="_blank" rel="nofollow noopener noreferrer">${link}</a>`;
+        }
+    );
+
     let refPostIdList = [];
 
     message = message.replaceAll(new RegExp('&gt;&gt;(\\d{1,10})', 'g'),
