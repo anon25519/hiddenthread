@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.5.8
+// @version      0.5.8.1
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -2902,7 +2902,7 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5.8";
+const CURRENT_VERSION = "0.5.8.1";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
@@ -3334,7 +3334,9 @@ function addHiddenPostToObj(postId, hiddenPostSubId) {
     let thread = window.Post(window.thread.id);
     let currentPost = thread.getPostsObj()[String(postId)];
     let postArticle = document.getElementById(`hidden_m${postId}${hiddenPostSubId > 0 ? '_'+hiddenPostSubId : ''}`);
-    currentPost.ajax.comment = currentPost.ajax.comment + '<br>' + postArticle.innerHTML;
+    if (currentPost && currentPost.ajax && currentPost.ajax.comment) {
+        currentPost.ajax.comment = currentPost.ajax.comment + '<br>' + postArticle.innerHTML;
+    }
 }
 
 // Ссылка на пост в тексте
@@ -3445,7 +3447,11 @@ async function renderHiddenPost(postId, loadedPost, unpackedData) {
         let hiddenPostSubId = await addHiddenPostToHtml(postId, loadedPost, unpackedData);
         addReplyLinks(postId, res.refPostIdList);
         // TODO: отображение скрытопостов во всплывающих постах с куклоскриптом
-        addHiddenPostToObj(postId, hiddenPostSubId); // Текст скрытопоста берется из HTML
+        try {
+            addHiddenPostToObj(postId, hiddenPostSubId); // Текст скрытопоста берется из HTML
+        } catch (e) {
+            Utils.trace('HiddenThread: addHiddenPostToObj error: ' + e + '. stack:\n' + e.stack);
+        }
 
         if (needToScroll && storage.isAutoScrollEnabled) {
             let heightDelta = Math.max(document.documentElement.offsetHeight, document.documentElement.scrollHeight) - oldHeight;
