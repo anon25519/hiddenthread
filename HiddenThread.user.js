@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.5.8.1
+// @version      0.5.8.2
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -2902,7 +2902,7 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5.8.1";
+const CURRENT_VERSION = "0.5.8.2";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
@@ -3334,7 +3334,7 @@ function addHiddenPostToObj(postId, hiddenPostSubId) {
     let thread = window.Post(window.thread.id);
     let currentPost = thread.getPostsObj()[String(postId)];
     let postArticle = document.getElementById(`hidden_m${postId}${hiddenPostSubId > 0 ? '_'+hiddenPostSubId : ''}`);
-    if (currentPost && currentPost.ajax && currentPost.ajax.comment) {
+    if (currentPost && currentPost.ajax) {
         currentPost.ajax.comment = currentPost.ajax.comment + '<br>' + postArticle.innerHTML;
     }
 }
@@ -3459,18 +3459,14 @@ async function renderHiddenPost(postId, loadedPost, unpackedData) {
         }
     }
 
-    if (storage.isAutoScrollEnabled) {
-        function promiseGenerator()
-        {
-            return new Promise(async function(resolve, reject) {
-                await renderHiddenPostImpl();
-                resolve();
-            });
-        }
-        await renderQueue.enqueue(promiseGenerator);
-    } else {
-        await renderHiddenPostImpl();
+    function promiseGenerator()
+    {
+        return new Promise(async function(resolve, reject) {
+            await renderHiddenPostImpl();
+            resolve();
+        });
     }
+    await renderQueue.enqueue(promiseGenerator);
 }
 
 
