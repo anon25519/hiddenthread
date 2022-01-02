@@ -560,18 +560,14 @@ async function renderHiddenPost(postId, loadedPost, unpackedData) {
         }
     }
 
-    if (storage.isAutoScrollEnabled) {
-        function promiseGenerator()
-        {
-            return new Promise(async function(resolve, reject) {
-                await renderHiddenPostImpl();
-                resolve();
-            });
-        }
-        await renderQueue.enqueue(promiseGenerator);
-    } else {
-        await renderHiddenPostImpl();
+    function promiseGenerator()
+    {
+        return new Promise(async function(resolve, reject) {
+            await renderHiddenPostImpl();
+            resolve();
+        });
     }
+    await renderQueue.enqueue(promiseGenerator);
 }
 
 
