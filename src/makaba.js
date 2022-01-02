@@ -435,7 +435,7 @@ function addHiddenPostToObj(postId, hiddenPostSubId) {
     let thread = window.Post(window.thread.id);
     let currentPost = thread.getPostsObj()[String(postId)];
     let postArticle = document.getElementById(`hidden_m${postId}${hiddenPostSubId > 0 ? '_'+hiddenPostSubId : ''}`);
-    if (currentPost && currentPost.ajax && currentPost.ajax.comment) {
+    if (currentPost && currentPost.ajax) {
         currentPost.ajax.comment = currentPost.ajax.comment + '<br>' + postArticle.innerHTML;
     }
 }
