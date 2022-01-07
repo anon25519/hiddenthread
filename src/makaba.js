@@ -374,11 +374,27 @@ async function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     }
     let tzName = (new Date()).toLocaleDateString(undefined, { timeZoneName: 'short' }).split(',')[1].trim();
     postMetadata.appendChild(createElementFromHTML(`<div>Дата создания скрытопоста (${tzName}): ${timeString}</div>`));
-    if (loadedPost.password)
+    if (loadedPost.password) {
+        let tmpDiv = document.createElement('div');
+        tmpDiv.style.visibility = 'hidden';
+        tmpDiv.style.position = 'absolute';
+        tmpDiv.style.height = 'auto';
+        tmpDiv.style.width = 'auto';
+        tmpDiv.style.whiteSpace = 'nowrap';
+        tmpDiv.classList.add('hiddenthread_metadata');
+        document.body.appendChild(tmpDiv);
+        tmpDiv.textContent = loadedPost.password;
+        let realPasswordWidth = tmpDiv.clientWidth;
+        const revealText = 'раскрыть'
+        tmpDiv.textContent = revealText;
+        let realRevealPasswordWidth = tmpDiv.clientWidth;
+        tmpDiv.remove();
         postMetadata.appendChild(createElementFromHTML(`<div>Пароль: ${passwordAliases[loadedPost.password]} (`+
             `<input readonly="" `+
-            `style="color:var(--theme_default_text);background-color:rgba(0, 0, 0, 0);border:0px;width:8.5ch;" value="раскрыть" `+
-            `onclick="this.value='${loadedPost.password}';this.style.width='${loadedPost.password.length+0.5}ch'">)</div>`));
+            `style="color:var(--theme_default_text);background-color:rgba(0, 0, 0, 0);border:0px;width:${realRevealPasswordWidth}px;`+
+            `padding-left:0px;padding-right:0px" value="${revealText}" `+
+            `onclick="this.value='${loadedPost.password}';this.style.width='${realPasswordWidth}px'">)</div>`));
+    }
     if (loadedPost.isPrivate) {
         postMetadata.appendChild(createElementFromHTML(
             `<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом `+
