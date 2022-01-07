@@ -891,6 +891,22 @@ function privateToPublicKey(privateKey) {
     return '';
 }
 
+function wrapMarkupTags(tag1, tag2, textarea) {
+    let len = textarea.value.length;
+    let start = textarea.selectionStart;
+    let end = textarea.selectionEnd;
+    let scrollTop = textarea.scrollTop;
+    let scrollLeft = textarea.scrollLeft;
+    let sel = textarea.value.substring(start, end);
+    let rep = tag1 + sel + tag2;
+
+    textarea.value =  textarea.value.substring(0,start) + rep + textarea.value.substring(end,len);
+    textarea.scrollTop = scrollTop;
+    textarea.scrollLeft = scrollLeft;
+    textarea.focus();
+    textarea.setSelectionRange(start+tag1.length, end+tag1.length);
+}
+
 function createInterface() {
     let toggleText = () => {
         return storage.hidePostForm
@@ -924,6 +940,16 @@ function createInterface() {
                     style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
                     rows="10"
                 ></textarea>
+                <div><span>Разметка: </span>
+                <input id="htMarkupBoldButton" type="button" value="B">
+                <input id="htMarkupItalicButton" type="button" value="I">
+                <input id="htMarkupGtButton" type="button" value="&gt;">
+                <input id="htMarkupUnderlineButton" type="button" value="U">
+                <input id="htMarkupOverlineButton" type="button" value="O">
+                <input id="htMarkupSpoilerButton" type="button" value="??">
+                <input id="htMarkupCrosslineButton" type="button" value="S">
+                <input id="htMarkupSuperButton" type="button" value="sup">
+                <input id="htMarkupSubButton" type="button" value="sub"></div>
                 <div id="hiddenFilesDiv" style="padding: 5px;">
                     <span>Выбери скрытые файлы: </span>
                     <input id="hiddenFilesInput" type="file" multiple="true" />
@@ -1477,6 +1503,18 @@ function createInterface() {
             manager.innerHTML = '';
         }
     }
+
+    // Кнопки разметки
+    let textarea = document.getElementById('hiddenPostInput');
+    document.getElementById('htMarkupBoldButton').onclick = function() { wrapMarkupTags('[b]', '[/b]', textarea); }
+    document.getElementById('htMarkupItalicButton').onclick = function() { wrapMarkupTags('[i]', '[/i]', textarea); }
+    document.getElementById('htMarkupGtButton').onclick = function() { wrapMarkupTags('>', '', textarea); }
+    document.getElementById('htMarkupUnderlineButton').onclick = function() { wrapMarkupTags('[u]', '[/u]', textarea); }
+    document.getElementById('htMarkupOverlineButton').onclick = function() { wrapMarkupTags('[o]', '[/o]', textarea); }
+    document.getElementById('htMarkupSpoilerButton').onclick = function() { wrapMarkupTags('[spoiler]', '[/spoiler]', textarea); }
+    document.getElementById('htMarkupCrosslineButton').onclick = function() { wrapMarkupTags('[s]', '[/s]', textarea); }
+    document.getElementById('htMarkupSuperButton').onclick = function() { wrapMarkupTags('[sup]', '[/sup]', textarea); }
+    document.getElementById('htMarkupSubButton').onclick = function() { wrapMarkupTags('[sub]', '[/sub]', textarea); }
 }
 
 function hidePosts(posts) {
