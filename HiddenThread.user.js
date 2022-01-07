@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.5.8.2
+// @version      0.5.9
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -2902,7 +2902,7 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5.8.2";
+const CURRENT_VERSION = "0.5.9";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
@@ -3273,11 +3273,27 @@ async function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     }
     let tzName = (new Date()).toLocaleDateString(undefined, { timeZoneName: 'short' }).split(',')[1].trim();
     postMetadata.appendChild(createElementFromHTML(`<div>Дата создания скрытопоста (${tzName}): ${timeString}</div>`));
-    if (loadedPost.password)
+    if (loadedPost.password) {
+        let tmpDiv = document.createElement('div');
+        tmpDiv.style.visibility = 'hidden';
+        tmpDiv.style.position = 'absolute';
+        tmpDiv.style.height = 'auto';
+        tmpDiv.style.width = 'auto';
+        tmpDiv.style.whiteSpace = 'nowrap';
+        tmpDiv.classList.add('hiddenthread_metadata');
+        document.body.appendChild(tmpDiv);
+        tmpDiv.textContent = loadedPost.password;
+        let realPasswordWidth = tmpDiv.clientWidth;
+        const revealText = 'раскрыть'
+        tmpDiv.textContent = revealText;
+        let realRevealPasswordWidth = tmpDiv.clientWidth;
+        tmpDiv.remove();
         postMetadata.appendChild(createElementFromHTML(`<div>Пароль: ${passwordAliases[loadedPost.password]} (`+
             `<input readonly="" `+
-            `style="color:var(--theme_default_text);background-color:rgba(0, 0, 0, 0);border:0px;width:8.5ch;" value="раскрыть" `+
-            `onclick="this.value='${loadedPost.password}';this.style.width='${loadedPost.password.length+0.5}ch'">)</div>`));
+            `style="color:var(--theme_default_text);background-color:rgba(0, 0, 0, 0);border:0px;width:${realRevealPasswordWidth}px;`+
+            `padding-left:0px;padding-right:0px" value="${revealText}" `+
+            `onclick="this.value='${loadedPost.password}';this.style.width='${realPasswordWidth}px'">)</div>`));
+    }
     if (loadedPost.isPrivate) {
         postMetadata.appendChild(createElementFromHTML(
             `<div style="color:orange;"><i>Этот пост виден только с твоим приватным ключом `+
@@ -3476,9 +3492,24 @@ async function loadAndRenderPost(postId, url, passwords, privateKeys) {
     let imgId = getImgName(url);
 
     try {
-        response = await fetch(url);
-        if (!response.ok) throw new Error(`fetch not ok, url: ${url}`);
-        imgArrayBuffer = await response.arrayBuffer();
+        let fetchOk = false;
+        let lastException = null;
+        for (let i = 0; i < 3; i++) {
+            try {
+                if (i > 0) {
+                    Utils.trace(`HiddenThread: fetch failed, retry ${i}/2`);
+                    await new Promise(resolve => setTimeout(resolve, i * 5000));
+                }
+                response = await fetch(url);
+                if (!response.ok) throw new Error(`fetch not ok, url: ${url}`);
+                imgArrayBuffer = await response.arrayBuffer();
+                fetchOk = true;
+                break;
+            } catch (e) {
+                lastException = e;
+            }
+        }
+        if (!fetchOk) throw lastException;
     } catch (e) {
         document.getElementById("imagesErrorCount").textContent =
             parseInt(document.getElementById("imagesErrorCount").textContent) + 1;
@@ -3759,6 +3790,22 @@ function privateToPublicKey(privateKey) {
     return '';
 }
 
+function wrapMarkupTags(tag1, tag2, textarea) {
+    let len = textarea.value.length;
+    let start = textarea.selectionStart;
+    let end = textarea.selectionEnd;
+    let scrollTop = textarea.scrollTop;
+    let scrollLeft = textarea.scrollLeft;
+    let sel = textarea.value.substring(start, end);
+    let rep = tag1 + sel + tag2;
+
+    textarea.value =  textarea.value.substring(0,start) + rep + textarea.value.substring(end,len);
+    textarea.scrollTop = scrollTop;
+    textarea.scrollLeft = scrollLeft;
+    textarea.focus();
+    textarea.setSelectionRange(start+tag1.length, end+tag1.length);
+}
+
 function createInterface() {
     let toggleText = () => {
         return storage.hidePostForm
@@ -3792,6 +3839,16 @@ function createInterface() {
                     style="box-sizing: border-box; display: inline-block; width: 100%; padding: 5px;"
                     rows="10"
                 ></textarea>
+                <div><span>Разметка: </span>
+                <input id="htMarkupBoldButton" type="button" value="B">
+                <input id="htMarkupItalicButton" type="button" value="I">
+                <input id="htMarkupGtButton" type="button" value="&gt;">
+                <input id="htMarkupUnderlineButton" type="button" value="U">
+                <input id="htMarkupOverlineButton" type="button" value="O">
+                <input id="htMarkupSpoilerButton" type="button" value="??">
+                <input id="htMarkupCrosslineButton" type="button" value="S">
+                <input id="htMarkupSuperButton" type="button" value="sup">
+                <input id="htMarkupSubButton" type="button" value="sub"></div>
                 <div id="hiddenFilesDiv" style="padding: 5px;">
                     <span>Выбери скрытые файлы: </span>
                     <input id="hiddenFilesInput" type="file" multiple="true" />
@@ -4345,6 +4402,18 @@ function createInterface() {
             manager.innerHTML = '';
         }
     }
+
+    // Кнопки разметки
+    let textarea = document.getElementById('hiddenPostInput');
+    document.getElementById('htMarkupBoldButton').onclick = function() { wrapMarkupTags('[b]', '[/b]', textarea); }
+    document.getElementById('htMarkupItalicButton').onclick = function() { wrapMarkupTags('[i]', '[/i]', textarea); }
+    document.getElementById('htMarkupGtButton').onclick = function() { wrapMarkupTags('>', '', textarea); }
+    document.getElementById('htMarkupUnderlineButton').onclick = function() { wrapMarkupTags('[u]', '[/u]', textarea); }
+    document.getElementById('htMarkupOverlineButton').onclick = function() { wrapMarkupTags('[o]', '[/o]', textarea); }
+    document.getElementById('htMarkupSpoilerButton').onclick = function() { wrapMarkupTags('[spoiler]', '[/spoiler]', textarea); }
+    document.getElementById('htMarkupCrosslineButton').onclick = function() { wrapMarkupTags('[s]', '[/s]', textarea); }
+    document.getElementById('htMarkupSuperButton').onclick = function() { wrapMarkupTags('[sup]', '[/sup]', textarea); }
+    document.getElementById('htMarkupSubButton').onclick = function() { wrapMarkupTags('[sub]', '[/sub]', textarea); }
 }
 
 function hidePosts(posts) {
