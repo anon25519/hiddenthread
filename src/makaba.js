@@ -593,9 +593,24 @@ async function loadAndRenderPost(postId, url, passwords, privateKeys) {
     let imgId = getImgName(url);
 
     try {
-        response = await fetch(url);
-        if (!response.ok) throw new Error(`fetch not ok, url: ${url}`);
-        imgArrayBuffer = await response.arrayBuffer();
+        let fetchOk = false;
+        let lastException = null;
+        for (let i = 0; i < 3; i++) {
+            try {
+                if (i > 0) {
+                    Utils.trace(`HiddenThread: fetch failed, retry ${i}/2`);
+                    await new Promise(resolve => setTimeout(resolve, i * 5000));
+                }
+                response = await fetch(url);
+                if (!response.ok) throw new Error(`fetch not ok, url: ${url}`);
+                imgArrayBuffer = await response.arrayBuffer();
+                fetchOk = true;
+                break;
+            } catch (e) {
+                lastException = e;
+            }
+        }
+        if (!fetchOk) throw lastException;
     } catch (e) {
         document.getElementById("imagesErrorCount").textContent =
             parseInt(document.getElementById("imagesErrorCount").textContent) + 1;
