@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         HiddenThread
-// @version      0.5.9
+// @version      0.5.10
 // @description  steganography for 2ch.hk
 // @author       anon25519
 // @include      *://2ch.*
@@ -2902,13 +2902,28 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5.9";
+const CURRENT_VERSION = "0.5.10";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
 const STORAGE_KEY = "hiddenThread";
 
 const MAX_IMAGE_RES_DEFAULT = 25; // 5k * 5k пикселей
+
+const DEFAULT_THRESHOLD_DATA_RATIO = 20;
+const DEFAULT_MAX_DATA_RATIO = 60;
+const DEFAULT_MIN_PIXEL_COUNT = 480000; // 800 * 600 пикселей
+const DEFAULT_MIN_PIXEL_COUNT_DEVIANCE = 10;
+const DEFAULT_MAX_PIXEL_COUNT = 6000000; // 3k * 2k пикселей
+const DEFAULT_MAX_PIXEL_COUNT_DEVIANCE = 10;
+const DEFAULT_MIN_WIDTH = 800;
+const DEFAULT_MIN_WIDTH_DEVIANCE = 10;
+const DEFAULT_MAX_WIDTH = 2000;
+const DEFAULT_MAX_WIDTH_DEVIANCE = 10;
+const DEFAULT_MIN_HEIGHT = 800;
+const DEFAULT_MIN_HEIGHT_DEVIANCE = 10;
+const DEFAULT_MAX_HEIGHT = 2000;
+const DEFAULT_MAX_HEIGHT_DEVIANCE = 10;
 
 let getStorage = () => {
     let storage = localStorage.getItem(STORAGE_KEY) || "{}";
@@ -3268,11 +3283,62 @@ async function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
         .toISOString().replace('T', ' ').replace(/\.\d+Z/g, '');
     let d = clearPost.getElementsByClassName('post__time')[0].textContent.split(' ');
     let postDateMs = Date.parse(`20${d[0].split('/')[2]}-${d[0].split('/')[1]}-${d[0].split('/')[0]}T${d[2]}Z`);
+    let incorrectTimeSpan = null;
     if (Math.abs(postDateMs/1000 - loadedPost.timestamp) > 24*3600) {
-        timeString += ' <span style="color:red;">(неверное время поста!)</span>';
+        incorrectTimeSpan = document.createElement('span');
+        incorrectTimeSpan.style.color = 'red';
+        incorrectTimeSpan.textContent = ' (неверное время поста!)';
     }
+
+    let postReplyLink = document.createElement('a');
+    postReplyLink.textContent = ' ответить';
+    postReplyLink.href = '#';
+    postReplyLink.onclick = function(e) {
+        e.preventDefault();
+
+        let selectedText = window.getSelection().toString();
+        if (selectedText) {
+            let currentEl = window.getSelection().getRangeAt(0).commonAncestorContainer;
+            while (true) {
+                // Проверяем, что выделение находится внутри поста, на который отвечаем
+                if (currentEl == clearPost) {
+                    selectedText = selectedText.replaceAll(new RegExp('\n(.+)', 'g'), '\n>$1');
+                    if (selectedText[0] && selectedText[0] != '\n') selectedText = '>' + selectedText;
+                    window.getSelection().removeAllRanges();
+                    break;
+                } else if (!currentEl) {
+                    selectedText = '';
+                    break;
+                }
+                currentEl = currentEl.parentNode;
+            }
+        }
+
+        let textarea = document.getElementById('hiddenPostInput');
+        textarea.value = textarea.value + `>>${postId}\n${selectedText}`;
+
+        if (isDollchan()) {
+            if (document.getElementById('de-pform').style.display == 'none') {
+                document.getElementsByClassName('de-parea-btn-reply')[0].click();
+            }
+        } else {
+            if (document.getElementById('postform').style.display == 'none') {
+                document.getElementsByClassName('newpost__label_top')[0].click();
+            }
+        }
+        if (document.getElementById('hiddenThreadForm').style.display == 'none') {
+            document.getElementById('hiddenThreadToggle').click();
+        }
+        textarea.scrollIntoView();
+    }
+
+    let postHeaderDiv = document.createElement('div');
     let tzName = (new Date()).toLocaleDateString(undefined, { timeZoneName: 'short' }).split(',')[1].trim();
-    postMetadata.appendChild(createElementFromHTML(`<div>Дата создания скрытопоста (${tzName}): ${timeString}</div>`));
+    postHeaderDiv.appendChild(document.createTextNode(`Дата создания скрытопоста (${tzName}): ${timeString}`));
+    if (incorrectTimeSpan) postHeaderDiv.appendChild(incorrectTimeSpan);
+    postHeaderDiv.appendChild(postReplyLink);
+    postMetadata.appendChild(postHeaderDiv);
+
     if (loadedPost.password) {
         let tmpDiv = document.createElement('div');
         tmpDiv.style.visibility = 'hidden';
@@ -3925,6 +3991,7 @@ function createInterface() {
                             <option>imagecdn.app</option>
                             <option>cataas.com (коты)</option>
                             <option>dog.ceo (собаки)</option>
+                            <option>waifu.pics (аниме)</option>
                         </select>
                         </div>
                         <div id="htContainerInputDiv">
@@ -3949,10 +4016,11 @@ function createInterface() {
                     <div style="padding-top:5px;">
                         Подстраивать разрешение картинки под размер поста: <input id="htIsAdjustResolution" type="checkbox">
                         <div id="htAdjustResolutionDiv" style="margin-left:18px;display:none">
+                        <input id="htResetAdjustValues" type="button" value="Сбросить параметры" />
                         <div>Пороговый процент заполнения: <input type="number" id="htThresholdDataRatio" min="1" max="100"
-                            value="${!isNaN(parseInt(storage.thresholdDataRatio)) ? storage.thresholdDataRatio : 20}" style="width:50px"></div>
+                            value="${!isNaN(parseInt(storage.thresholdDataRatio)) ? storage.thresholdDataRatio : DEFAULT_THRESHOLD_DATA_RATIO}" style="width:50px"></div>
                         <div>Максимальный процент заполнения: <input type="number" id="htMaxDataRatio" min="1" max="100"
-                            value="${!isNaN(parseInt(storage.maxDataRatio)) ? storage.maxDataRatio : 60}" style="width:50px"></div>
+                            value="${!isNaN(parseInt(storage.maxDataRatio)) ? storage.maxDataRatio : DEFAULT_MAX_DATA_RATIO}" style="width:50px"></div>
                         <div>
                             <div>
                                 <div>
@@ -3961,13 +4029,13 @@ function createInterface() {
                                 </div>
                                 <div id="htPixelCountAdjustDiv" style="margin-left:18px">
                                     <div>Минимум: <input type="number" id="htMinPixelCount" min="1"
-                                        value="${!isNaN(parseInt(storage.minPixelCount)) ? storage.minPixelCount : 480000}" style="width:80px"> пикс. ± 
+                                        value="${!isNaN(parseInt(storage.minPixelCount)) ? storage.minPixelCount : DEFAULT_MIN_PIXEL_COUNT}" style="width:80px"> пикс. ± 
                                         <input type="number" id="htMinPixelCountDeviance" min="0" max="99"
-                                        value="${!isNaN(parseInt(storage.minPixelCountDeviance)) ? storage.minPixelCountDeviance : 10}" style="width:50px"> %</div>
+                                        value="${!isNaN(parseInt(storage.minPixelCountDeviance)) ? storage.minPixelCountDeviance : DEFAULT_MIN_PIXEL_COUNT_DEVIANCE}" style="width:50px"> %</div>
                                     <div>Максимум: <input type="number" id="htMaxPixelCount" min="1"
-                                        value="${!isNaN(parseInt(storage.maxPixelCount)) ? storage.maxPixelCount : 6000000}" style="width:80px"> пикс. ± 
+                                        value="${!isNaN(parseInt(storage.maxPixelCount)) ? storage.maxPixelCount : DEFAULT_MAX_PIXEL_COUNT}" style="width:80px"> пикс. ± 
                                         <input type="number" id="htMaxPixelCountDeviance" min="0" max="99"
-                                        value="${!isNaN(parseInt(storage.maxPixelCountDeviance)) ? storage.maxPixelCountDeviance : 10}" style="width:50px"> %</div>
+                                        value="${!isNaN(parseInt(storage.maxPixelCountDeviance)) ? storage.maxPixelCountDeviance : DEFAULT_MAX_PIXEL_COUNT_DEVIANCE}" style="width:50px"> %</div>
                                 </div>
                             </div>
 
@@ -3978,13 +4046,13 @@ function createInterface() {
                                 </div>
                                 <div id="htWidthAdjustDiv" style="margin-left:18px;display:none">
                                     <div>Минимум: <input type="number" id="htMinWidth" min="1"
-                                        value="${!isNaN(parseInt(storage.minWidth)) ? storage.minWidth : 800}" style="width:80px"> пикс. ± 
+                                        value="${!isNaN(parseInt(storage.minWidth)) ? storage.minWidth : DEFAULT_MIN_WIDTH}" style="width:80px"> пикс. ± 
                                         <input type="number" id="htMinWidthDeviance" min="0" max="99"
-                                        value="${!isNaN(parseInt(storage.minWidthDeviance)) ? storage.minWidthDeviance : 10}" style="width:50px"> %</div>
+                                        value="${!isNaN(parseInt(storage.minWidthDeviance)) ? storage.minWidthDeviance : DEFAULT_MIN_WIDTH_DEVIANCE}" style="width:50px"> %</div>
                                     <div>Максимум: <input type="number" id="htMaxWidth" min="1"
-                                        value="${!isNaN(parseInt(storage.maxWidth)) ? storage.maxWidth : 2000}" style="width:80px"> пикс. ± 
+                                        value="${!isNaN(parseInt(storage.maxWidth)) ? storage.maxWidth : DEFAULT_MAX_WIDTH}" style="width:80px"> пикс. ± 
                                         <input type="number" id="htMaxWidthDeviance" min="0" max="99"
-                                        value="${!isNaN(parseInt(storage.maxWidthDeviance)) ? storage.maxWidthDeviance : 10}" style="width:50px"> %</div>
+                                        value="${!isNaN(parseInt(storage.maxWidthDeviance)) ? storage.maxWidthDeviance : DEFAULT_MAX_WIDTH_DEVIANCE}" style="width:50px"> %</div>
                                 </div>
                             </div>
 
@@ -3995,13 +4063,13 @@ function createInterface() {
                                 </div>
                                 <div id="htHeightAdjustDiv" style="margin-left:18px;display:none">
                                     <div>Минимум: <input type="number" id="htMinHeight" min="1"
-                                        value="${!isNaN(parseInt(storage.minHeight)) ? storage.minHeight : 800}" style="width:80px"> пикс. ± 
+                                        value="${!isNaN(parseInt(storage.minHeight)) ? storage.minHeight : DEFAULT_MIN_HEIGHT}" style="width:80px"> пикс. ± 
                                         <input type="number" id="htMinHeightDeviance" min="0" max="99"
-                                        value="${!isNaN(parseInt(storage.minHeightDeviance)) ? storage.minHeightDeviance : 10}" style="width:50px"> %</div>
+                                        value="${!isNaN(parseInt(storage.minHeightDeviance)) ? storage.minHeightDeviance : DEFAULT_MIN_HEIGHT_DEVIANCE}" style="width:50px"> %</div>
                                     <div>Максимум: <input type="number" id="htMaxHeight" min="1"
-                                        value="${!isNaN(parseInt(storage.maxHeight)) ? storage.maxHeight : 2000}" style="width:80px"> пикс. ± 
+                                        value="${!isNaN(parseInt(storage.maxHeight)) ? storage.maxHeight : DEFAULT_MAX_HEIGHT}" style="width:80px"> пикс. ± 
                                         <input type="number" id="htMaxHeightDeviance" min="0" max="99"
-                                        value="${!isNaN(parseInt(storage.maxHeightDeviance)) ? storage.maxHeightDeviance : 10}" style="width:50px"> %
+                                        value="${!isNaN(parseInt(storage.maxHeightDeviance)) ? storage.maxHeightDeviance : DEFAULT_MAX_HEIGHT_DEVIANCE}" style="width:50px"> %
                                     </div>
                                 </div>
                             </div>
@@ -4186,7 +4254,7 @@ function createInterface() {
     document.getElementById('htContainerNameSelect').dispatchEvent(new Event('change'));
 
     function adjustResolutionCheckHandler() {
-        // Для случайных и сгенерированных нет оригинального разрешения
+        // Для случайных (picsum, imagecdn) и сгенерированных нет оригинального разрешения
         let containerType = document.getElementById('htContainerTypeSelect').selectedIndex;
         let containerPack = document.getElementById('htContainerPackSelect').selectedIndex;
         if ((containerType == 0 && (containerPack == 0 || containerPack == 1)) || containerType == 3) {
@@ -4414,6 +4482,24 @@ function createInterface() {
     document.getElementById('htMarkupCrosslineButton').onclick = function() { wrapMarkupTags('[s]', '[/s]', textarea); }
     document.getElementById('htMarkupSuperButton').onclick = function() { wrapMarkupTags('[sup]', '[/sup]', textarea); }
     document.getElementById('htMarkupSubButton').onclick = function() { wrapMarkupTags('[sub]', '[/sub]', textarea); }
+
+    // Кнопка сброса параметров разрешения
+    document.getElementById('htResetAdjustValues').onclick = function() {
+        document.getElementById('htThresholdDataRatio').value = DEFAULT_THRESHOLD_DATA_RATIO;
+        document.getElementById('htMaxDataRatio').value = DEFAULT_MAX_DATA_RATIO;
+        document.getElementById('htMinPixelCount').value = DEFAULT_MIN_PIXEL_COUNT;
+        document.getElementById('htMinPixelCountDeviance').value = DEFAULT_MIN_PIXEL_COUNT_DEVIANCE;
+        document.getElementById('htMaxPixelCount').value = DEFAULT_MAX_PIXEL_COUNT;
+        document.getElementById('htMaxPixelCountDeviance').value = DEFAULT_MAX_PIXEL_COUNT_DEVIANCE;
+        document.getElementById('htMinWidth').value = DEFAULT_MIN_WIDTH;
+        document.getElementById('htMinWidthDeviance').value = DEFAULT_MIN_WIDTH_DEVIANCE;
+        document.getElementById('htMaxWidth').value = DEFAULT_MAX_WIDTH;
+        document.getElementById('htMaxWidthDeviance').value = DEFAULT_MAX_WIDTH_DEVIANCE;
+        document.getElementById('htMinHeight').value = DEFAULT_MIN_HEIGHT;
+        document.getElementById('htMinHeightDeviance').value = DEFAULT_MIN_HEIGHT_DEVIANCE;
+        document.getElementById('htMaxHeight').value = DEFAULT_MAX_HEIGHT;
+        document.getElementById('htMaxHeightDeviance').value = DEFAULT_MAX_HEIGHT_DEVIANCE;
+    }
 }
 
 function hidePosts(posts) {
@@ -4920,6 +5006,15 @@ async function getRandomContainer(container, dataLength) {
             if (!obj.status || obj.status !== 'success' || !obj.message)
                 throw new Error(`wrong object: ${JSON.stringify(obj)}`);
             image.src = obj.message;
+        } else if (container.pack == 4) {
+            let jsonUrl = `https://api.waifu.pics/sfw/waifu?${nocache}`;
+            let response = await fetch(jsonUrl);
+            if (!response.ok)
+                throw new Error(`fetch not ok, url: ${jsonUrl}`);
+            let obj = await response.json();
+            if (!obj.url)
+                throw new Error(`wrong object: ${JSON.stringify(obj)}`);
+            image.src = obj.url;
         }
 
         // Для картинок без родного разрешения отключаем подстройку, чтобы не масштабировать лишний раз
@@ -4929,7 +5024,13 @@ async function getRandomContainer(container, dataLength) {
         await image.decode();
     } catch (e) {
         Utils.trace(`HiddenThread: ошибка при загрузке случайного контейнера "${image.src}": ${e}`);
-        throw new Error('Не удалось загрузить случайный контейнер. Попробуйте ещё раз или выберите свою картинку.');
+        if (container.pack == 4) {
+            throw new Error('Не удалось загрузить случайный контейнер. Попробуйте ещё раз или выберите свою картинку.\n' +
+                'Для загрузки с waifu.pics нужно установить расширение для обхода настроек CORS ' +
+                '(для firefox - CORS Everywhere, для chrome - CORS Unblock)');
+        } else {
+            throw new Error('Не удалось загрузить случайный контейнер. Попробуйте ещё раз или выберите свою картинку.');
+        }
     }
     return image;
 }
