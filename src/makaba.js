@@ -11,6 +11,21 @@ const STORAGE_KEY = "hiddenThread";
 
 const MAX_IMAGE_RES_DEFAULT = 25; // 5k * 5k пикселей
 
+const DEFAULT_THRESHOLD_DATA_RATIO = 20;
+const DEFAULT_MAX_DATA_RATIO = 60;
+const DEFAULT_MIN_PIXEL_COUNT = 480000; // 800 * 600 пикселей
+const DEFAULT_MIN_PIXEL_COUNT_DEVIANCE = 10;
+const DEFAULT_MAX_PIXEL_COUNT = 6000000; // 3k * 2k пикселей
+const DEFAULT_MAX_PIXEL_COUNT_DEVIANCE = 10;
+const DEFAULT_MIN_WIDTH = 800;
+const DEFAULT_MIN_WIDTH_DEVIANCE = 10;
+const DEFAULT_MAX_WIDTH = 2000;
+const DEFAULT_MAX_WIDTH_DEVIANCE = 10;
+const DEFAULT_MIN_HEIGHT = 800;
+const DEFAULT_MIN_HEIGHT_DEVIANCE = 10;
+const DEFAULT_MAX_HEIGHT = 2000;
+const DEFAULT_MAX_HEIGHT_DEVIANCE = 10;
+
 let getStorage = () => {
     let storage = localStorage.getItem(STORAGE_KEY) || "{}";
     return JSON.parse(storage);
@@ -1102,10 +1117,11 @@ function createInterface() {
                     <div style="padding-top:5px;">
                         Подстраивать разрешение картинки под размер поста: <input id="htIsAdjustResolution" type="checkbox">
                         <div id="htAdjustResolutionDiv" style="margin-left:18px;display:none">
+                        <input id="htResetAdjustValues" type="button" value="Сбросить параметры" />
                         <div>Пороговый процент заполнения: <input type="number" id="htThresholdDataRatio" min="1" max="100"
-                            value="${!isNaN(parseInt(storage.thresholdDataRatio)) ? storage.thresholdDataRatio : 20}" style="width:50px"></div>
+                            value="${!isNaN(parseInt(storage.thresholdDataRatio)) ? storage.thresholdDataRatio : DEFAULT_THRESHOLD_DATA_RATIO}" style="width:50px"></div>
                         <div>Максимальный процент заполнения: <input type="number" id="htMaxDataRatio" min="1" max="100"
-                            value="${!isNaN(parseInt(storage.maxDataRatio)) ? storage.maxDataRatio : 60}" style="width:50px"></div>
+                            value="${!isNaN(parseInt(storage.maxDataRatio)) ? storage.maxDataRatio : DEFAULT_MAX_DATA_RATIO}" style="width:50px"></div>
                         <div>
                             <div>
                                 <div>
@@ -1114,13 +1130,13 @@ function createInterface() {
                                 </div>
                                 <div id="htPixelCountAdjustDiv" style="margin-left:18px">
                                     <div>Минимум: <input type="number" id="htMinPixelCount" min="1"
-                                        value="${!isNaN(parseInt(storage.minPixelCount)) ? storage.minPixelCount : 480000}" style="width:80px"> пикс. ± 
+                                        value="${!isNaN(parseInt(storage.minPixelCount)) ? storage.minPixelCount : DEFAULT_MIN_PIXEL_COUNT}" style="width:80px"> пикс. ± 
                                         <input type="number" id="htMinPixelCountDeviance" min="0" max="99"
-                                        value="${!isNaN(parseInt(storage.minPixelCountDeviance)) ? storage.minPixelCountDeviance : 10}" style="width:50px"> %</div>
+                                        value="${!isNaN(parseInt(storage.minPixelCountDeviance)) ? storage.minPixelCountDeviance : DEFAULT_MIN_PIXEL_COUNT_DEVIANCE}" style="width:50px"> %</div>
                                     <div>Максимум: <input type="number" id="htMaxPixelCount" min="1"
-                                        value="${!isNaN(parseInt(storage.maxPixelCount)) ? storage.maxPixelCount : 6000000}" style="width:80px"> пикс. ± 
+                                        value="${!isNaN(parseInt(storage.maxPixelCount)) ? storage.maxPixelCount : DEFAULT_MAX_PIXEL_COUNT}" style="width:80px"> пикс. ± 
                                         <input type="number" id="htMaxPixelCountDeviance" min="0" max="99"
-                                        value="${!isNaN(parseInt(storage.maxPixelCountDeviance)) ? storage.maxPixelCountDeviance : 10}" style="width:50px"> %</div>
+                                        value="${!isNaN(parseInt(storage.maxPixelCountDeviance)) ? storage.maxPixelCountDeviance : DEFAULT_MAX_PIXEL_COUNT_DEVIANCE}" style="width:50px"> %</div>
                                 </div>
                             </div>
 
@@ -1131,13 +1147,13 @@ function createInterface() {
                                 </div>
                                 <div id="htWidthAdjustDiv" style="margin-left:18px;display:none">
                                     <div>Минимум: <input type="number" id="htMinWidth" min="1"
-                                        value="${!isNaN(parseInt(storage.minWidth)) ? storage.minWidth : 800}" style="width:80px"> пикс. ± 
+                                        value="${!isNaN(parseInt(storage.minWidth)) ? storage.minWidth : DEFAULT_MIN_WIDTH}" style="width:80px"> пикс. ± 
                                         <input type="number" id="htMinWidthDeviance" min="0" max="99"
-                                        value="${!isNaN(parseInt(storage.minWidthDeviance)) ? storage.minWidthDeviance : 10}" style="width:50px"> %</div>
+                                        value="${!isNaN(parseInt(storage.minWidthDeviance)) ? storage.minWidthDeviance : DEFAULT_MIN_WIDTH_DEVIANCE}" style="width:50px"> %</div>
                                     <div>Максимум: <input type="number" id="htMaxWidth" min="1"
-                                        value="${!isNaN(parseInt(storage.maxWidth)) ? storage.maxWidth : 2000}" style="width:80px"> пикс. ± 
+                                        value="${!isNaN(parseInt(storage.maxWidth)) ? storage.maxWidth : DEFAULT_MAX_WIDTH}" style="width:80px"> пикс. ± 
                                         <input type="number" id="htMaxWidthDeviance" min="0" max="99"
-                                        value="${!isNaN(parseInt(storage.maxWidthDeviance)) ? storage.maxWidthDeviance : 10}" style="width:50px"> %</div>
+                                        value="${!isNaN(parseInt(storage.maxWidthDeviance)) ? storage.maxWidthDeviance : DEFAULT_MAX_WIDTH_DEVIANCE}" style="width:50px"> %</div>
                                 </div>
                             </div>
 
@@ -1148,13 +1164,13 @@ function createInterface() {
                                 </div>
                                 <div id="htHeightAdjustDiv" style="margin-left:18px;display:none">
                                     <div>Минимум: <input type="number" id="htMinHeight" min="1"
-                                        value="${!isNaN(parseInt(storage.minHeight)) ? storage.minHeight : 800}" style="width:80px"> пикс. ± 
+                                        value="${!isNaN(parseInt(storage.minHeight)) ? storage.minHeight : DEFAULT_MIN_HEIGHT}" style="width:80px"> пикс. ± 
                                         <input type="number" id="htMinHeightDeviance" min="0" max="99"
-                                        value="${!isNaN(parseInt(storage.minHeightDeviance)) ? storage.minHeightDeviance : 10}" style="width:50px"> %</div>
+                                        value="${!isNaN(parseInt(storage.minHeightDeviance)) ? storage.minHeightDeviance : DEFAULT_MIN_HEIGHT_DEVIANCE}" style="width:50px"> %</div>
                                     <div>Максимум: <input type="number" id="htMaxHeight" min="1"
-                                        value="${!isNaN(parseInt(storage.maxHeight)) ? storage.maxHeight : 2000}" style="width:80px"> пикс. ± 
+                                        value="${!isNaN(parseInt(storage.maxHeight)) ? storage.maxHeight : DEFAULT_MAX_HEIGHT}" style="width:80px"> пикс. ± 
                                         <input type="number" id="htMaxHeightDeviance" min="0" max="99"
-                                        value="${!isNaN(parseInt(storage.maxHeightDeviance)) ? storage.maxHeightDeviance : 10}" style="width:50px"> %
+                                        value="${!isNaN(parseInt(storage.maxHeightDeviance)) ? storage.maxHeightDeviance : DEFAULT_MAX_HEIGHT_DEVIANCE}" style="width:50px"> %
                                     </div>
                                 </div>
                             </div>
@@ -1567,6 +1583,24 @@ function createInterface() {
     document.getElementById('htMarkupCrosslineButton').onclick = function() { wrapMarkupTags('[s]', '[/s]', textarea); }
     document.getElementById('htMarkupSuperButton').onclick = function() { wrapMarkupTags('[sup]', '[/sup]', textarea); }
     document.getElementById('htMarkupSubButton').onclick = function() { wrapMarkupTags('[sub]', '[/sub]', textarea); }
+
+    // Кнопка сброса параметров разрешения
+    document.getElementById('htResetAdjustValues').onclick = function() {
+        document.getElementById('htThresholdDataRatio').value = DEFAULT_THRESHOLD_DATA_RATIO;
+        document.getElementById('htMaxDataRatio').value = DEFAULT_MAX_DATA_RATIO;
+        document.getElementById('htMinPixelCount').value = DEFAULT_MIN_PIXEL_COUNT;
+        document.getElementById('htMinPixelCountDeviance').value = DEFAULT_MIN_PIXEL_COUNT_DEVIANCE;
+        document.getElementById('htMaxPixelCount').value = DEFAULT_MAX_PIXEL_COUNT;
+        document.getElementById('htMaxPixelCountDeviance').value = DEFAULT_MAX_PIXEL_COUNT_DEVIANCE;
+        document.getElementById('htMinWidth').value = DEFAULT_MIN_WIDTH;
+        document.getElementById('htMinWidthDeviance').value = DEFAULT_MIN_WIDTH_DEVIANCE;
+        document.getElementById('htMaxWidth').value = DEFAULT_MAX_WIDTH;
+        document.getElementById('htMaxWidthDeviance').value = DEFAULT_MAX_WIDTH_DEVIANCE;
+        document.getElementById('htMinHeight').value = DEFAULT_MIN_HEIGHT;
+        document.getElementById('htMinHeightDeviance').value = DEFAULT_MIN_HEIGHT_DEVIANCE;
+        document.getElementById('htMaxHeight').value = DEFAULT_MAX_HEIGHT;
+        document.getElementById('htMaxHeightDeviance').value = DEFAULT_MAX_HEIGHT_DEVIANCE;
+    }
 }
 
 function hidePosts(posts) {
