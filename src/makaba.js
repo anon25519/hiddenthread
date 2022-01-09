@@ -369,11 +369,62 @@ async function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
         .toISOString().replace('T', ' ').replace(/\.\d+Z/g, '');
     let d = clearPost.getElementsByClassName('post__time')[0].textContent.split(' ');
     let postDateMs = Date.parse(`20${d[0].split('/')[2]}-${d[0].split('/')[1]}-${d[0].split('/')[0]}T${d[2]}Z`);
+    let incorrectTimeSpan = null;
     if (Math.abs(postDateMs/1000 - loadedPost.timestamp) > 24*3600) {
-        timeString += ' <span style="color:red;">(неверное время поста!)</span>';
+        incorrectTimeSpan = document.createElement('span');
+        incorrectTimeSpan.style.color = 'red';
+        incorrectTimeSpan.textContent = ' (неверное время поста!)';
     }
+
+    let postReplyLink = document.createElement('a');
+    postReplyLink.textContent = ' ответить';
+    postReplyLink.href = '#';
+    postReplyLink.onclick = function(e) {
+        e.preventDefault();
+
+        let selectedText = window.getSelection().toString();
+        if (selectedText) {
+            let currentEl = window.getSelection().getRangeAt(0).commonAncestorContainer;
+            while (true) {
+                // Проверяем, что выделение находится внутри поста, на который отвечаем
+                if (currentEl == clearPost) {
+                    selectedText = selectedText.replaceAll(new RegExp('\n(.+)', 'g'), '\n>$1');
+                    if (selectedText[0] && selectedText[0] != '\n') selectedText = '>' + selectedText;
+                    window.getSelection().removeAllRanges();
+                    break;
+                } else if (!currentEl) {
+                    selectedText = '';
+                    break;
+                }
+                currentEl = currentEl.parentNode;
+            }
+        }
+
+        let textarea = document.getElementById('hiddenPostInput');
+        textarea.value = textarea.value + `>>${postId}\n${selectedText}`;
+
+        if (isDollchan()) {
+            if (document.getElementById('de-pform').style.display == 'none') {
+                document.getElementsByClassName('de-parea-btn-reply')[0].click();
+            }
+        } else {
+            if (document.getElementById('postform').style.display == 'none') {
+                document.getElementsByClassName('newpost__label_top')[0].click();
+            }
+        }
+        if (document.getElementById('hiddenThreadForm').style.display == 'none') {
+            document.getElementById('hiddenThreadToggle').click();
+        }
+        textarea.scrollIntoView();
+    }
+
+    let postHeaderDiv = document.createElement('div');
     let tzName = (new Date()).toLocaleDateString(undefined, { timeZoneName: 'short' }).split(',')[1].trim();
-    postMetadata.appendChild(createElementFromHTML(`<div>Дата создания скрытопоста (${tzName}): ${timeString}</div>`));
+    postHeaderDiv.appendChild(document.createTextNode(`Дата создания скрытопоста (${tzName}): ${timeString}`));
+    if (incorrectTimeSpan) postHeaderDiv.appendChild(incorrectTimeSpan);
+    postHeaderDiv.appendChild(postReplyLink);
+    postMetadata.appendChild(postHeaderDiv);
+
     if (loadedPost.password) {
         let tmpDiv = document.createElement('div');
         tmpDiv.style.visibility = 'hidden';
