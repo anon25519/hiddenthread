@@ -246,6 +246,15 @@ async function getRandomContainer(container, dataLength) {
             if (!obj.status || obj.status !== 'success' || !obj.message)
                 throw new Error(`wrong object: ${JSON.stringify(obj)}`);
             image.src = obj.message;
+        } else if (container.pack == 4) {
+            let jsonUrl = `https://api.waifu.pics/sfw/waifu?${nocache}`;
+            let response = await fetch(jsonUrl);
+            if (!response.ok)
+                throw new Error(`fetch not ok, url: ${jsonUrl}`);
+            let obj = await response.json();
+            if (!obj.url)
+                throw new Error(`wrong object: ${JSON.stringify(obj)}`);
+            image.src = obj.url;
         }
 
         // Для картинок без родного разрешения отключаем подстройку, чтобы не масштабировать лишний раз
@@ -255,7 +264,13 @@ async function getRandomContainer(container, dataLength) {
         await image.decode();
     } catch (e) {
         Utils.trace(`HiddenThread: ошибка при загрузке случайного контейнера "${image.src}": ${e}`);
-        throw new Error('Не удалось загрузить случайный контейнер. Попробуйте ещё раз или выберите свою картинку.');
+        if (container.pack == 4) {
+            throw new Error('Не удалось загрузить случайный контейнер. Попробуйте ещё раз или выберите свою картинку.\n' +
+                'Для загрузки с waifu.pics нужно установить расширение для обхода настроек CORS ' +
+                '(для firefox - CORS Everywhere, для chrome - CORS Unblock)');
+        } else {
+            throw new Error('Не удалось загрузить случайный контейнер. Попробуйте ещё раз или выберите свою картинку.');
+        }
     }
     return image;
 }

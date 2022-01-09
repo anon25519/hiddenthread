@@ -1077,6 +1077,7 @@ function createInterface() {
                             <option>imagecdn.app</option>
                             <option>cataas.com (коты)</option>
                             <option>dog.ceo (собаки)</option>
+                            <option>waifu.pics (аниме)</option>
                         </select>
                         </div>
                         <div id="htContainerInputDiv">
@@ -1338,7 +1339,7 @@ function createInterface() {
     document.getElementById('htContainerNameSelect').dispatchEvent(new Event('change'));
 
     function adjustResolutionCheckHandler() {
-        // Для случайных и сгенерированных нет оригинального разрешения
+        // Для случайных (picsum, imagecdn) и сгенерированных нет оригинального разрешения
         let containerType = document.getElementById('htContainerTypeSelect').selectedIndex;
         let containerPack = document.getElementById('htContainerPackSelect').selectedIndex;
         if ((containerType == 0 && (containerPack == 0 || containerPack == 1)) || containerType == 3) {
