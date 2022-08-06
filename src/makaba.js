@@ -3,7 +3,7 @@ let Crypto = require('./crypto.js')
 let Post = require('./post.js')
 let HtCache = require('./cache.js')
 
-const CURRENT_VERSION = "0.5.10";
+const CURRENT_VERSION = "0.5.11";
 const VERSION_SOURCE = "https://raw.githubusercontent.com/anon25519/hiddenthread/main/version.info";
 const SCRIPT_SOURCE = 'https://github.com/anon25519/hiddenthread/raw/main/HiddenThread.user.js'
 
@@ -351,6 +351,18 @@ function getClosingTagIndex(text, i, tag) {
     return -1;
 }
 
+// Количество скрытопостов в одном посте
+function getAttachedHiddenPostsCount(dataNum) {
+    let c = 0;
+    let posts = document.getElementsByClassName('post_type_hiddenthread');
+    for (let post of posts) {
+        if (post.getAttribute('data-num') == dataNum) {
+            c++;
+        }
+    }
+    return c;
+}
+
 // Добавление HTML скрытопоста к основному посту
 async function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     Utils.trace(`HiddenThread: Post ${postId} is hidden, its object:`);
@@ -358,7 +370,7 @@ async function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
     Utils.trace(unpackedData);
 
     let clearPost = document.getElementById('post-' + postId);
-    let postBodyDivCount = clearPost.getElementsByClassName('post_type_hiddenthread').length;
+    let postBodyDivCount = getAttachedHiddenPostsCount(postId);
     let postBodyDiv = document.createElement('div');
     postBodyDiv.id = `hidden_post-body-${postId}${postBodyDivCount > 0 ? '_'+postBodyDivCount : ''}`;
     postBodyDiv.classList.add("post");
@@ -401,14 +413,17 @@ async function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
         if (selectedText) {
             let currentEl = window.getSelection().getRangeAt(0).commonAncestorContainer;
             while (true) {
+                if (!currentEl) {
+                    selectedText = '';
+                    break;
+                }
                 // Проверяем, что выделение находится внутри поста, на который отвечаем
-                if (currentEl == clearPost) {
+                else if (currentEl.classList && currentEl.classList.contains('post_type_hiddenthread') &&
+                    currentEl.getAttribute('data-num') == clearPost.getAttribute('data-num'))
+                {
                     selectedText = selectedText.replaceAll(new RegExp('\n(.+)', 'g'), '\n>$1');
                     if (selectedText[0] && selectedText[0] != '\n') selectedText = '>' + selectedText;
                     window.getSelection().removeAllRanges();
-                    break;
-                } else if (!currentEl) {
-                    selectedText = '';
                     break;
                 }
                 currentEl = currentEl.parentNode;
@@ -416,7 +431,7 @@ async function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
         }
 
         let textarea = document.getElementById('hiddenPostInput');
-        textarea.value = textarea.value + `>>${postId}\n${selectedText}`;
+        textarea.value = textarea.value + `>>${postId}\n${selectedText}\n`;
 
         if (isDollchan()) {
             if (document.getElementById('de-pform').style.display == 'none') {
@@ -499,8 +514,7 @@ async function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
 
     postBodyDiv.appendChild(postArticle);
 
-    clearPost.appendChild(document.createElement('br'));
-    clearPost.appendChild(postBodyDiv);
+    clearPost.parentNode.insertBefore(postBodyDiv, clearPost.nextSibling);
 
     // Переносим ссылки на скрытопосты в тело скрытопоста, если они ещё не там
     let normalPostBody = document.getElementById(`post-${postId}`);
@@ -514,7 +528,7 @@ async function addHiddenPostToHtml(postId, loadedPost, unpackedData) {
 
 // Добавление HTML скрытопоста в объект основного поста (для всплывающих постов)
 function addHiddenPostToObj(postId, hiddenPostSubId) {
-    let thread = window.Post(window.thread.id);
+    let thread = window.Post(CFG.BOARD.THREADID);
     let currentPost = thread.getPostsObj()[String(postId)];
     let postArticle = document.getElementById(`hidden_m${postId}${hiddenPostSubId > 0 ? '_'+hiddenPostSubId : ''}`);
     if (currentPost && currentPost.ajax) {
@@ -524,9 +538,9 @@ function addHiddenPostToObj(postId, hiddenPostSubId) {
 
 // Ссылка на пост в тексте
 function createReplyLink(postId) {
-    return `<a href="/${window.board}/res/${window.thread.id}.html#${postId}" ` +
+    return `<a href="/${CFG.BOARD.NAME}/res/${CFG.BOARD.THREADID}.html#${postId}" ` +
         `class="${isDollchan() ? 'de-link-postref' : ''} post-reply-link" ` +
-        `data-thread="${window.thread.id}" data-num="${postId}">&gt;&gt;${postId}</a>`;
+        `data-thread="${CFG.BOARD.THREADID}" data-num="${postId}">&gt;&gt;${postId}</a>`;
 }
 
 // Ссылка на пост в ответах
@@ -540,7 +554,7 @@ function createPostRefLink(postId) {
 }
 
 function addReplyLinks(postId, refPostIdList) {
-    let thread = window.Post(window.thread.id);
+    let thread = window.Post(CFG.BOARD.THREADID);
 
     let refPostIdSet = new Set();
     for (const refPostId of refPostIdList) {
@@ -1214,7 +1228,7 @@ function createInterface() {
     document.getElementById('postform').insertAdjacentHTML(isDollchan() ? 'afterend' : 'beforeend', formTemplate);
 
     // Меню
-    document.getElementsByClassName('adminbar__boards')[0].insertAdjacentHTML(
+    document.getElementsByClassName('header__opts')[0].insertAdjacentHTML(
         'beforeend', `
         <span>&nbsp;&nbsp;&nbsp;&nbsp;HiddenThread:
         <a id="hideNormalPosts" href="#">Свернуть/развернуть все обычные посты</a>
@@ -1605,7 +1619,7 @@ function createInterface() {
 
 function hidePosts(posts) {
     for (let post of posts) {
-        let body = document.getElementById(`post-body-${post}`);
+        let body = document.getElementById(`post-${post}`);
         if (isDollchan()) {
             body.getElementsByClassName('post__message')[0].classList.toggle('de-post-hiddencontent');
             if (body.getElementsByClassName('post__images')[0]) {
@@ -1636,7 +1650,7 @@ function getPostsToScan()
 {
     if (isDollchan()) return getPostsToScanFromHtml();
 
-    let threadId = window.thread.id;
+    let threadId = CFG.BOARD.THREADID;
     let thread = window.Post(threadId);
     let postsToScan = [];
 
@@ -1654,6 +1668,7 @@ function getPostsToScan()
         if (!postAjax) continue;
 
         let postFiles = postAjax.files;
+        if (!postFiles) continue;
 
         let images = [];
         for (let file of postFiles) {
